@@ -1,0 +1,51 @@
+{
+  "name": "voicenotes-api",
+  "version": "1.1.0",
+  "description": "API minimali con Express per Vercel - Endpoint di test con rate limiting, logging e validazione",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "node api/index.js",
+    "start": "node api/index.js",
+    "vercel-dev": "vercel dev",
+    "test": "jest --coverage --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "clean:logs": "node scripts/clean-logs.js"
+  },
+  "keywords": [
+    "express",
+    "api",
+    "vercel",
+    "nodejs",
+    "rate-limit",
+    "logging",
+    "validation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "joi": "^17.11.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "api/**/*.js",
+      "!api/index.js"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "verbose": true
+  }
+}
