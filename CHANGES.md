@@ -4,6 +4,26 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.1.3] - 10 Gennaio 2026
+
+### 🐛 Fix Filesystem Read-Only Vercel
+
+#### Problema
+- Vercel utilizza un **filesystem read-only** nell'ambiente serverless
+- Il tentativo di creare la directory `logs/` causava l'errore `ENOENT: no such file or directory, mkdir '/var/task/logs'`
+
+#### Soluzione
+- Modificato `api/utils/logger.js` per rilevare l'ambiente Vercel
+- **In Vercel/produzione**: logging solo su console (nessuna scrittura su file)
+- **In sviluppo locale**: logging su file con rotazione giornaliera (comportamento originale)
+
+#### Dettagli Tecnici
+- Rilevamento ambiente tramite variabili `VERCEL` e `VERCEL_ENV`
+- Import dinamico di `winston-daily-rotate-file` solo quando necessario
+- Gestione graceful degli errori di creazione directory
+
+---
+
 ## [1.1.2] - 10 Gennaio 2026
 
 ### 🔧 Upgrade Node.js per Vercel
