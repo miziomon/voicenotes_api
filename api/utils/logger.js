@@ -10,8 +10,11 @@
  * - Pulizia automatica dei log più vecchi di 30 giorni (solo locale)
  *
  * @author Voicenotes API Team
- * @version 1.1.2
+ * @version 1.1.3
  */
+
+// Debug: verifica che il file corretto sia caricato su Vercel
+console.log('[Logger] Versione 1.1.3 - Ambiente:', process.env.VERCEL ? 'Vercel' : 'Locale');
 
 // ============================================
 // IMPORTAZIONE DELLE DIPENDENZE
