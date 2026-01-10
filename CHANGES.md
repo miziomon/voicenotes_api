@@ -4,6 +4,20 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.1.2] - 10 Gennaio 2026
+
+### 🔧 Upgrade Node.js per Vercel
+
+#### Modifiche al package.json
+- **Aggiornato Node.js da `18.x` a `24.x`**: Vercel ha dismesso il supporto per Node.js 18.x, ora è richiesta la versione 24.x
+- Questa modifica è necessaria per il corretto deployment su Vercel
+
+#### Nota
+- Il codice è compatibile con Node.js 24.x senza modifiche
+- Tutti i test passano correttamente con la nuova versione
+
+---
+
 ## [1.1.1] - 10 Gennaio 2026
 
 ### 🔧 Fix Compatibilità Vercel
