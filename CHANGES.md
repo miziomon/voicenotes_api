@@ -4,6 +4,24 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.1.1] - 10 Gennaio 2026
+
+### 🔧 Fix Compatibilità Vercel
+
+#### Modifiche al package.json
+- **Versione Node.js fissata a `18.x`**: cambiato da `>=18.0.0` a `18.x` per evitare warning su Vercel riguardo l'aggiornamento automatico quando viene rilasciata una nuova versione major di Node.js
+- **Aggiornato supertest a `^7.1.3`**: la versione 6.x era deprecata, aggiornata alla versione supportata per eliminare i warning durante l'installazione
+
+#### Warning Risolti
+- `Warning: Detected "engines": { "node": ">=18.0.0" }` - risolto con versione specifica
+- `npm warn deprecated supertest@6.3.4` - risolto aggiornando a v7.1.3+
+
+#### Note
+- I warning relativi a `inflight` e `glob` sono dipendenze transitive di Jest e non causano problemi di funzionamento
+- Il deployment su Vercel ora procede senza warning critici
+
+---
+
 ## [1.1.0] - 10 Gennaio 2026
 
 ### 🆕 Nuove Funzionalità
@@ -89,7 +107,7 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 #### Nuove DevDependencies
 - `jest@^29.7.0` - Framework di test
-- `supertest@^6.3.3` - Test HTTP
+- `supertest@^7.1.3` - Test HTTP
 
 #### Nuovi File Creati
 ```
