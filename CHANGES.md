@@ -4,6 +4,124 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.2.0] - 10 Gennaio 2026
+
+### 🚀 Nuovo Endpoint: POST /v1/ask - Assistente AI per Note Vocali
+
+#### Descrizione
+Implementato nuovo endpoint che permette di fare domande alle proprie note vocali utilizzando:
+- **Ricerca semantica** tramite embedding Gemini e Supabase pgvector
+- **Generazione risposte** contestualizzate con Google Gemini 2.0 Flash
+
+#### Endpoint
+```
+POST /v1/ask
+Content-Type: application/json
+```
+
+#### Body della Richiesta
+```json
+{
+  "userId": "2198e343-eeeb-4361-be3b-7c8a826e193a",  // UUID v4 obbligatorio
+  "query": "La tua domanda qui",                     // Obbligatorio, max 2000 caratteri
+  "threshold": 0.7,                                  // Opzionale, 0.0-1.0 (default 0.7)
+  "count": 5,                                        // Opzionale, 1-20 (default 5)
+  "temperature": 0.7,                                // Opzionale, 0.0-1.0 (default 0.7)
+  "maxTokens": 2048                                  // Opzionale, 100-4096 (default 2048)
+}
+```
+
+#### Risposta
+```json
+{
+  "success": true,
+  "metadata": {
+    "timestamp": "2026-01-10T22:00:00.000Z",
+    "processingTimeMs": 1234,
+    "query": "...",
+    "userId": "...",
+    "notesFound": 3,
+    "model": "gemini-2.0-flash",
+    "parameters": { ... },
+    "cache": { ... }
+  },
+  "data": {
+    "response": "Risposta dell'AI basata sulle note...",
+    "contextNotes": [
+      { "id": "...", "title": "...", "similarity": 0.85 }
+    ]
+  },
+  "error": null
+}
+```
+
+#### Funzionalità Implementate
+
+1. **Ricerca Semantica**
+   - Generazione embedding con `text-embedding-004`
+   - Ricerca vettoriale tramite funzione RPC `match_notes` su Supabase
+   - Soglia di similarità configurabile
+
+2. **Generazione Risposte AI**
+   - Utilizzo Gemini 2.0 Flash per risposte contestualizzate
+   - System prompt ottimizzato per citare le fonti
+   - Temperatura e lunghezza risposta configurabili
+
+3. **Caching Embedding**
+   - Cache LRU per query frequenti
+   - TTL di 5 minuti
+   - Riduce chiamate API e migliora performance
+
+4. **Retry con Backoff Esponenziale**
+   - Massimo 3 tentativi per errori temporanei
+   - Backoff esponenziale (1s, 2s, 4s)
+   - Non ritenta per errori di validazione/autenticazione
+
+5. **Timeout Configurabili**
+   - Timeout di 30 secondi per ogni operazione API
+   - Previene richieste bloccate
+
+6. **Validazione UUID**
+   - Verifica che userId sia un UUID v4 valido
+   - Messaggi di errore chiari in italiano
+
+7. **Rate Limiting Specifico**
+   - Limite più restrittivo (10 req/15min) per endpoint /v1/ask
+   - Protegge da abusi delle API esterne
+
+#### Nuove Dipendenze
+- `@google/generative-ai@^0.21.0` - SDK Google Gemini
+- `@supabase/supabase-js@^2.39.0` - Client Supabase
+- `dotenv@^16.3.1` - Caricamento variabili ambiente
+- `uuid@^9.0.1` - Validazione UUID
+
+#### Nuovi File
+```
+api/
+└── services/
+    └── askService.js    # Servizio principale per /v1/ask
+```
+
+#### Variabili Ambiente Richieste
+```env
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_KEY=eyJhbGciOi...
+GEMINI_API_KEY=AIza...
+```
+
+#### Codici Errore
+| Codice | Descrizione |
+|--------|-------------|
+| `USER_ID_INVALID` | L'userId non è un UUID valido |
+| `EMBEDDING_ERROR` | Errore generazione embedding |
+| `SEARCH_ERROR` | Errore ricerca note su Supabase |
+| `NO_NOTES_FOUND` | Nessuna nota rilevante trovata |
+| `GENERATION_ERROR` | Errore generazione risposta Gemini |
+| `SERVICE_UNAVAILABLE` | Servizio AI non disponibile |
+| `INTERNAL_ERROR` | Errore interno generico |
+
+---
+
 ## [1.1.3] - 10 Gennaio 2026
 
 ### 🐛 Fix Filesystem Read-Only Vercel

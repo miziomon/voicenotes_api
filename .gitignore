@@ -78,3 +78,6 @@ error.log
 __MACOSX/
 .Spotlight-V100
 .Trashes
+
+# File di test
+api_tests.http

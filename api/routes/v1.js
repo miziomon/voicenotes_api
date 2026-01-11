@@ -8,18 +8,19 @@
  * e poi montate sul path /v1 nel file principale.
  *
  * Endpoint disponibili:
- * - GET /v1/test - Endpoint di test
- * - GET /v1/health - Health check per monitoraggio
+ * - GET  /v1/test   - Endpoint di test
+ * - GET  /v1/health - Health check per monitoraggio
+ * - GET  /v1/info   - Informazioni API
+ * - POST /v1/ask    - Assistente AI per note vocali
  *
  * @author Voicenotes API Team
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 // ============================================
 // IMPORTAZIONE DELLE DIPENDENZE
 // ============================================
 
-// Importiamo il Router di Express per creare un gruppo di route
 const express = require('express');
 const router = express.Router();
 
@@ -27,20 +28,121 @@ const router = express.Router();
 const { logger } = require('../utils/logger');
 
 // Importiamo il rate limiter per le API versionate
-const { apiLimiter } = require('../utils/rateLimiter');
+const { apiLimiter, strictLimiter } = require('../utils/rateLimiter');
 
 // Importiamo il validatore per la validazione degli input
-const { validaInput, sanitizzaInput, schemas } = require('../utils/validator');
+const { validaInput, sanitizzaInput, schemas, Joi, messaggiErrore } = require('../utils/validator');
+
+// Importiamo il servizio Ask (lazy loading per evitare errori se env non configurato)
+let askService = null;
+const getAskServiceSafe = () => {
+    if (!askService) {
+        try {
+            const { getAskService } = require('../services/askService');
+            askService = getAskService();
+        } catch (error) {
+            logger.error(`Errore caricamento AskService: ${error.message}`);
+            return null;
+        }
+    }
+    return askService;
+};
+
+// ============================================
+// SCHEMA VALIDAZIONE PER /v1/ask
+// ============================================
+
+/**
+ * Schema Joi per la validazione del body della richiesta /v1/ask
+ *
+ * Parametri richiesti:
+ * - userId: UUID dell'utente
+ * - query: Domanda da fare (1-2000 caratteri)
+ *
+ * Parametri opzionali:
+ * - threshold: Soglia similarità (0.0-1.0, default 0.7)
+ * - count: Numero max note (1-20, default 5)
+ * - temperature: Creatività risposta (0.0-1.0, default 0.7)
+ * - maxTokens: Lunghezza max risposta (100-4096, default 2048)
+ */
+const askSchema = Joi.object({
+    // User ID - deve essere un UUID valido
+    userId: Joi.string()
+        .guid({ version: ['uuidv4'] })
+        .required()
+        .messages({
+            ...messaggiErrore,
+            'string.guid': 'userId deve essere un UUID v4 valido',
+            'any.required': 'userId è un campo obbligatorio'
+        }),
+
+    // Query - domanda dell'utente
+    query: Joi.string()
+        .min(1)
+        .max(2000)
+        .trim()
+        .required()
+        .messages({
+            ...messaggiErrore,
+            'string.min': 'La query non può essere vuota',
+            'string.max': 'La query non può superare 2000 caratteri',
+            'any.required': 'query è un campo obbligatorio'
+        }),
+
+    // Threshold - soglia di similarità
+    threshold: Joi.number()
+        .min(0)
+        .max(1)
+        .default(0.7)
+        .messages({
+            ...messaggiErrore,
+            'number.min': 'threshold deve essere almeno 0',
+            'number.max': 'threshold non può superare 1'
+        }),
+
+    // Count - numero massimo di note
+    count: Joi.number()
+        .integer()
+        .min(1)
+        .max(20)
+        .default(5)
+        .messages({
+            ...messaggiErrore,
+            'number.min': 'count deve essere almeno 1',
+            'number.max': 'count non può superare 20'
+        }),
+
+    // Temperature - creatività della risposta
+    temperature: Joi.number()
+        .min(0)
+        .max(1)
+        .default(0.7)
+        .messages({
+            ...messaggiErrore,
+            'number.min': 'temperature deve essere almeno 0',
+            'number.max': 'temperature non può superare 1'
+        }),
+
+    // Max Tokens - lunghezza massima risposta
+    maxTokens: Joi.number()
+        .integer()
+        .min(100)
+        .max(4096)
+        .default(2048)
+        .messages({
+            ...messaggiErrore,
+            'number.min': 'maxTokens deve essere almeno 100',
+            'number.max': 'maxTokens non può superare 4096'
+        })
+}).messages(messaggiErrore);
 
 // ============================================
 // VARIABILI PER MONITORAGGIO UPTIME
 // ============================================
 
-// Timestamp di avvio del server (per calcolare uptime)
 const startTime = Date.now();
-
-// Contatore delle richieste processate
 let richiesteProcessate = 0;
+let richiesteAsk = 0;
 
 // ============================================
 // MIDDLEWARE SPECIFICI PER V1
@@ -67,43 +169,116 @@ router.use((req, res, next) => {
  *
  * Route: GET /v1/test
  * Descrizione: Endpoint per verificare che l'API sia funzionante
- *
- * Query Parameters (opzionali):
- * - message: Messaggio personalizzato da includere nella risposta
- * - format: Formato della risposta ('json' o 'text')
- *
- * Risposta JSON:
- * {
- *   "result": true,
- *   "version": "1",
- *   "message": "..." (se fornito)
- * }
  */
 router.get('/test', validaInput(schemas.testQuery, 'query'), (req, res) => {
-    // Logghiamo la richiesta ricevuta
     logger.info(`Richiesta /v1/test - Query params: ${JSON.stringify(req.query)}`);
 
-    // Costruiamo l'oggetto di risposta base
     const risposta = {
         result: true,
         version: '1',
         timestamp: new Date().toISOString()
     };
 
-    // Se è stato fornito un messaggio, lo includiamo nella risposta
     if (req.query.message) {
         risposta.message = req.query.message;
     }
 
-    // Se il formato richiesto è 'text', restituiamo testo semplice
     if (req.query.format === 'text') {
         logger.info('Risposta /v1/test in formato text');
         return res.type('text/plain').send(`Test superato - Versione 1 - ${risposta.timestamp}`);
     }
 
-    // Restituiamo la risposta JSON
     logger.info('Risposta /v1/test in formato JSON');
     res.status(200).json(risposta);
+});
+
+// ============================================
+// ENDPOINT: POST /v1/ask
+// ============================================
+
+/**
+ * Endpoint Assistente AI per Note Vocali
+ *
+ * Route: POST /v1/ask
+ * Descrizione: Fa domande alle note vocali usando ricerca semantica e Gemini AI
+ *
+ * Body JSON richiesto:
+ * {
+ *   "userId": "uuid-v4",           // ID utente (obbligatorio)
+ *   "query": "domanda",            // Domanda da fare (obbligatorio)
+ *   "threshold": 0.7,              // Soglia similarità (opzionale, 0.0-1.0)
+ *   "count": 5,                    // Max note da usare (opzionale, 1-20)
+ *   "temperature": 0.7,            // Creatività risposta (opzionale, 0.0-1.0)
+ *   "maxTokens": 2048              // Lunghezza max risposta (opzionale, 100-4096)
+ * }
+ *
+ * Risposta JSON:
+ * {
+ *   "success": true/false,
+ *   "metadata": { ... },
+ *   "data": {
+ *     "response": "risposta AI",
+ *     "contextNotes": [...]
+ *   },
+ *   "error": null | { "code": "...", "message": "..." }
+ * }
+ */
+router.post('/ask', strictLimiter, validaInput(askSchema, 'body'), async (req, res) => {
+    richiesteAsk++;
+    const requestStartTime = Date.now();
+
+    logger.info(`Richiesta /v1/ask - User: ${req.body.userId}, Query: "${req.body.query.substring(0, 50)}..."`);
+
+    try {
+        // Ottieni il servizio Ask
+        const service = getAskServiceSafe();
+
+        if (!service) {
+            logger.error('AskService non disponibile');
+            return res.status(503).json({
+                success: false,
+                metadata: {
+                    timestamp: new Date().toISOString(),
+                    processingTimeMs: Date.now() - requestStartTime
+                },
+                data: null,
+                error: {
+                    code: 'SERVICE_UNAVAILABLE',
+                    message: 'Il servizio AI non è attualmente disponibile. Verifica la configurazione delle variabili ambiente.'
+                }
+            });
+        }
+
+        // Esegui la richiesta
+        const result = await service.ask({
+            userId: req.body.userId,
+            query: req.body.query,
+            threshold: req.body.threshold,
+            count: req.body.count,
+            temperature: req.body.temperature,
+            maxTokens: req.body.maxTokens
+        });
+
+        // Restituisci la risposta con lo status code appropriato
+        const statusCode = result.success ? 200 : (result.error?.code === 'NO_NOTES_FOUND' ? 200 : 400);
+        res.status(statusCode).json(result);
+
+    } catch (error) {
+        logger.error(`Errore /v1/ask: ${error.message}`);
+
+        res.status(500).json({
+            success: false,
+            metadata: {
+                timestamp: new Date().toISOString(),
+                processingTimeMs: Date.now() - requestStartTime
+            },
+            data: null,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message: 'Si è verificato un errore interno. Riprova più tardi.'
+            }
+        });
+    }
 });
 
 // ============================================
@@ -115,38 +290,36 @@ router.get('/test', validaInput(schemas.testQuery, 'query'), (req, res) => {
  *
  * Route: GET /v1/health
  * Descrizione: Endpoint per monitoraggio uptime e stato del servizio
- *
- * Questo endpoint fornisce informazioni dettagliate sullo stato
- * del servizio, utili per sistemi di monitoraggio esterni
- * come UptimeRobot, Pingdom, etc.
- *
- * Risposta JSON:
- * {
- *   "status": "healthy",
- *   "uptime": { ... },
- *   "memoria": { ... },
- *   "timestamp": "..."
- * }
  */
 router.get('/health', (req, res) => {
-    // Calcoliamo l'uptime del server
     const uptimeMs = Date.now() - startTime;
     const uptimeSeconds = Math.floor(uptimeMs / 1000);
     const uptimeMinutes = Math.floor(uptimeSeconds / 60);
     const uptimeHours = Math.floor(uptimeMinutes / 60);
     const uptimeDays = Math.floor(uptimeHours / 24);
 
-    // Otteniamo informazioni sull'uso della memoria
     const memoriaUsata = process.memoryUsage();
 
-    // Costruiamo l'oggetto di risposta con tutte le informazioni
+    // Verifica stato servizio Ask
+    let askServiceStatus = 'unknown';
+    let askServiceStats = null;
+    try {
+        const service = getAskServiceSafe();
+        if (service) {
+            askServiceStatus = 'healthy';
+            askServiceStats = service.getStats();
+        } else {
+            askServiceStatus = 'unavailable';
+        }
+    } catch (error) {
+        askServiceStatus = 'error';
+    }
+
     const healthInfo = {
-        // Stato generale del servizio
         status: 'healthy',
-        versione: '1.1.0',
+        versione: '1.2.0',
         ambiente: process.env.NODE_ENV || 'development',
 
-        // Informazioni sull'uptime
         uptime: {
             avvio: new Date(startTime).toISOString(),
             durata: {
@@ -158,12 +331,18 @@ router.get('/health', (req, res) => {
             durataSecondiTotali: uptimeSeconds
         },
 
-        // Statistiche sulle richieste
         statistiche: {
-            richiesteProcessate: richiesteProcessate
+            richiesteProcessate,
+            richiesteAsk
         },
 
-        // Informazioni sulla memoria (in MB)
+        servizi: {
+            askService: {
+                status: askServiceStatus,
+                stats: askServiceStats
+            }
+        },
+
         memoria: {
             heapUsato: Math.round(memoriaUsata.heapUsed / 1024 / 1024 * 100) / 100,
             heapTotale: Math.round(memoriaUsata.heapTotal / 1024 / 1024 * 100) / 100,
@@ -171,21 +350,16 @@ router.get('/health', (req, res) => {
             unita: 'MB'
         },
 
-        // Informazioni sul sistema
         sistema: {
             nodeVersion: process.version,
             piattaforma: process.platform,
             architettura: process.arch
         },
 
-        // Timestamp della risposta
         timestamp: new Date().toISOString()
     };
 
-    // Logghiamo la richiesta health check
     logger.info(`Health check eseguito - Status: ${healthInfo.status}`);
-
-    // Restituiamo le informazioni di health
     res.status(200).json(healthInfo);
 });
 
@@ -205,8 +379,8 @@ router.get('/info', (req, res) => {
     res.status(200).json({
         nome: 'Voicenotes API',
         versione: '1',
-        versioneCompleta: '1.1.0',
-        descrizione: 'API minimali con Express per Vercel',
+        versioneCompleta: '1.2.0',
+        descrizione: 'API per Voicenotes con AI - Ricerca semantica e assistente Gemini',
         endpoints: {
             test: {
                 path: '/v1/test',
@@ -215,6 +389,19 @@ router.get('/info', (req, res) => {
                 parametri: {
                     message: 'Messaggio opzionale da includere nella risposta',
                     format: 'Formato risposta: json (default) o text'
+                }
+            },
+            ask: {
+                path: '/v1/ask',
+                metodo: 'POST',
+                descrizione: 'Assistente AI - Fa domande alle note vocali',
+                body: {
+                    userId: 'UUID v4 dell\'utente (obbligatorio)',
+                    query: 'Domanda da fare alle note (obbligatorio, max 2000 caratteri)',
+                    threshold: 'Soglia similarità 0.0-1.0 (opzionale, default 0.7)',
+                    count: 'Numero max note 1-20 (opzionale, default 5)',
+                    temperature: 'Creatività risposta 0.0-1.0 (opzionale, default 0.7)',
+                    maxTokens: 'Lunghezza max risposta 100-4096 (opzionale, default 2048)'
                 }
             },
             health: {
@@ -237,5 +424,4 @@ router.get('/info', (req, res) => {
 // ESPORTAZIONE DEL ROUTER
 // ============================================
 
-// Esportiamo il router per montarlo nel file principale
 module.exports = router;
