@@ -476,7 +476,7 @@ router.get('/health', (req, res) => {
 
     const healthInfo = {
         status: 'healthy',
-        versione: '1.3.0',
+        versione: '1.3.1',
         ambiente: process.env.NODE_ENV || 'development',
 
         uptime: {
@@ -543,7 +543,7 @@ router.get('/info', (req, res) => {
     res.status(200).json({
         nome: 'Voicenotes API',
         versione: '1',
-        versioneCompleta: '1.3.0',
+        versioneCompleta: '1.3.1',
         descrizione: 'API per Voicenotes con AI - Ricerca semantica, assistente Gemini e embedding vettoriali',
         endpoints: {
             test: {

@@ -4,6 +4,85 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.3.1] - 12 Gennaio 2026
+
+### 🔧 Semplificazione API e Rimozione Endpoint Legacy
+
+#### Modifiche alla Risposta Root
+
+L'endpoint root (`GET /`) ora restituisce solo la versione dell'API:
+
+**Prima:**
+```json
+{
+  "messaggio": "Benvenuto nelle API Voicenotes",
+  "versione": "1.1.0",
+  "versioniAPI": { ... },
+  "endpointsLegacy": { ... },
+  "documentazione": "...",
+  "timestamp": "..."
+}
+```
+
+**Ora:**
+```json
+{
+  "versione": "1.3.1"
+}
+```
+
+#### Endpoint Legacy Rimossi
+
+I seguenti endpoint legacy sono stati **rimossi** e ora restituiscono **404 Not Found**:
+
+| Endpoint Rimosso | Alternativa |
+|------------------|-------------|
+| `GET /test` | Usa `GET /v1/test` |
+| `GET /api/test` | Usa `GET /v1/test` |
+| `GET /health` | Usa `GET /v1/health` |
+
+La risposta 404 include un suggerimento con gli endpoint disponibili:
+```json
+{
+  "errore": "Endpoint non trovato",
+  "percorso": "/test",
+  "suggerimento": "Usa gli endpoint con prefisso /v1",
+  "endpointsDisponibili": ["/", "/v1/test", "/v1/health", "/v1/info", "/v1/ask", "/v1/embeddings"],
+  "codice": "NOT_FOUND"
+}
+```
+
+#### Endpoint Disponibili (v1)
+
+Tutti gli endpoint richiedono ora il prefisso `/v1`:
+
+| Metodo | Endpoint | Descrizione |
+|--------|----------|-------------|
+| GET | `/` | Restituisce solo la versione |
+| GET | `/v1/test` | Endpoint di test |
+| GET | `/v1/health` | Health check dettagliato |
+| GET | `/v1/info` | Informazioni API |
+| POST | `/v1/ask` | Assistente AI |
+| POST | `/v1/embeddings` | Generazione embedding |
+
+#### Configurazione Variabili Test
+
+Aggiunta gestione sicura delle variabili di test:
+
+- **`api_tests.http`**: Ora legge `TEST_USER_ID` dal file `.env` usando `$dotenv`
+- **`.env.example`**: Nuovo file template con valori placeholder (committato in git)
+- **`.env`**: File con valori reali (non committato, in `.gitignore`)
+
+#### File Modificati
+
+- `api/index.js` - Semplificata risposta root, rimossi endpoint legacy
+- `tests/api.test.js` - Rimossi test legacy, aggiunti test 404
+- `api_tests.http` - Aggiornato per usare variabili da `.env`
+- `.env.example` - Nuovo file template
+- `.gitignore` - Aggiunto `!.env.example` per committare il template
+
+---
+
 ## [1.3.0] - 12 Gennaio 2026
 
 ### 🚀 Nuovo Endpoint: POST /v1/embeddings - Generazione Embedding Vettoriali

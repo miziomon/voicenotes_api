@@ -18,7 +18,7 @@
  * - Avvio del server (solo in ambiente locale)
  *
  * @author Voicenotes API Team
- * @version 1.1.0
+ * @version 1.3.1
  */
 
 // ============================================
@@ -130,115 +130,22 @@ logger.info('Routes v1 montate su /v1');
  * Endpoint root GET
  *
  * Route: GET /
- * Descrizione: Endpoint principale che fornisce informazioni sull'API
+ * Descrizione: Restituisce solo la versione dell'API
  */
 app.get('/', (req, res) => {
-    logger.info('Richiesta ricevuta sulla root /');
-
     res.status(200).json({
-        messaggio: 'Benvenuto nelle API Voicenotes',
-        versione: '1.1.0',
-        versioniAPI: {
-            v1: {
-                base: '/v1',
-                endpoints: ['/v1/test', '/v1/health', '/v1/info']
-            }
-        },
-        endpointsLegacy: {
-            test: '/test - Endpoint di test (legacy)',
-            apiTest: '/api/test - Endpoint alternativo (legacy)',
-            health: '/health - Health check globale'
-        },
-        documentazione: 'Vedi README.md e CHANGES.md per informazioni complete',
-        timestamp: new Date().toISOString()
+        versione: '1.3.1'
     });
 });
 
 // ============================================
-// ENDPOINT LEGACY (retrocompatibilità)
+// NOTA: Gli endpoint legacy sono stati rimossi
 // ============================================
-
-/**
- * Endpoint di test GET (legacy)
- *
- * Route: GET /test
- * Descrizione: Endpoint legacy per retrocompatibilità
- */
-app.get('/test', (req, res) => {
-    logger.info('Richiesta ricevuta su /test (legacy)');
-
-    res.status(200).json({
-        result: true,
-        nota: 'Questo è un endpoint legacy. Usa /v1/test per la versione più recente.'
-    });
-});
-
-/**
- * Endpoint di test alternativo (legacy)
- *
- * Route: GET /api/test
- */
-app.get('/api/test', (req, res) => {
-    logger.info('Richiesta ricevuta su /api/test (legacy)');
-
-    res.status(200).json({
-        result: true,
-        nota: 'Questo è un endpoint legacy. Usa /v1/test per la versione più recente.'
-    });
-});
-
-// ============================================
-// ENDPOINT HEALTH CHECK GLOBALE
-// ============================================
-
-/**
- * Endpoint Health Check globale
- *
- * Route: GET /health
- * Descrizione: Health check semplificato per monitoraggio rapido
- *
- * Questo endpoint non ha rate limiting per permettere
- * ai servizi di monitoraggio di funzionare sempre.
- */
-app.get('/health', (req, res) => {
-    // Calcoliamo l'uptime
-    const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000);
-
-    logger.info('Health check globale eseguito');
-
-    res.status(200).json({
-        status: 'healthy',
-        versione: '1.1.0',
-        uptime: uptimeSeconds,
-        uptimeFormattato: formatUptime(uptimeSeconds),
-        timestamp: new Date().toISOString()
-    });
-});
-
-// ============================================
-// FUNZIONI DI UTILITÀ
-// ============================================
-
-/**
- * Formatta l'uptime in formato leggibile
- *
- * @param {number} secondi - Uptime in secondi
- * @returns {string} Uptime formattato (es. "2g 3h 15m 30s")
- */
-function formatUptime(secondi) {
-    const giorni = Math.floor(secondi / 86400);
-    const ore = Math.floor((secondi % 86400) / 3600);
-    const minuti = Math.floor((secondi % 3600) / 60);
-    const sec = secondi % 60;
-
-    const parti = [];
-    if (giorni > 0) parti.push(`${giorni}g`);
-    if (ore > 0) parti.push(`${ore}h`);
-    if (minuti > 0) parti.push(`${minuti}m`);
-    parti.push(`${sec}s`);
-
-    return parti.join(' ');
-}
+// Gli endpoint /test, /api/test e /health non sono più disponibili.
+// Usa le versioni con prefisso /v1:
+// - /v1/test   → Endpoint di test
+// - /v1/health → Health check
+// - /v1/info   → Informazioni API
 
 // ============================================
 // GESTIONE ERRORI 404 (Not Found)
@@ -254,14 +161,14 @@ app.use((req, res) => {
         errore: 'Endpoint non trovato',
         percorso: req.path,
         metodo: req.method,
-        suggerimento: 'Controlla la documentazione per gli endpoint disponibili',
+        suggerimento: 'Usa gli endpoint con prefisso /v1',
         endpointsDisponibili: [
             '/',
-            '/health',
-            '/test',
             '/v1/test',
             '/v1/health',
-            '/v1/info'
+            '/v1/info',
+            '/v1/ask',
+            '/v1/embeddings'
         ],
         codice: 'NOT_FOUND'
     });
@@ -306,14 +213,14 @@ if (require.main === module) {
         console.log(`📍 Server in ascolto su: http://localhost:${PORT}`);
         console.log('');
         console.log('📌 ENDPOINT DISPONIBILI:');
-        console.log('   ├── GET /              → Informazioni API');
-        console.log('   ├── GET /health        → Health check globale');
-        console.log('   ├── GET /test          → Test legacy');
+        console.log('   ├── GET  /               → Versione API');
         console.log('   │');
         console.log('   └── API v1:');
-        console.log('       ├── GET /v1/test   → Endpoint test v1');
-        console.log('       ├── GET /v1/health → Health check v1');
-        console.log('       └── GET /v1/info   → Info API v1');
+        console.log('       ├── GET  /v1/test       → Endpoint test');
+        console.log('       ├── GET  /v1/health     → Health check');
+        console.log('       ├── GET  /v1/info       → Info API');
+        console.log('       ├── POST /v1/ask        → Assistente AI');
+        console.log('       └── POST /v1/embeddings → Generazione embedding');
         console.log('');
         console.log('⚙️  FUNZIONALITÀ ATTIVE:');
         console.log('   ├── Rate Limiting (100 req/15min globale)');

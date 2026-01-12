@@ -27,14 +27,8 @@
 # ENDPOINT ROOT
 # ==============================================================================
 
-### Test root endpoint
+### Root - Restituisce solo la versione API
 GET {{baseUrl}}/
-
-### Test health check globale
-GET {{baseUrl}}/health
-
-### Test legacy endpoint
-GET {{baseUrl}}/test
 
 # ==============================================================================
 # API v1 - TEST

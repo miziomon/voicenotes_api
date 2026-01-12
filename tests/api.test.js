@@ -13,10 +13,7 @@
  * npm run test:watch    → Esegue i test in modalità watch
  *
  * Endpoint testati:
- * - GET  /              → Root info
- * - GET  /test          → Test legacy
- * - GET  /api/test      → Test legacy alternativo
- * - GET  /health        → Health check globale
+ * - GET  /              → Versione API
  * - GET  /v1/test       → Test v1
  * - GET  /v1/health     → Health check v1
  * - GET  /v1/info       → Informazioni API v1
@@ -24,7 +21,7 @@
  * - POST /v1/embeddings → Generazione embedding
  *
  * @author Voicenotes API Team
- * @version 1.3.0
+ * @version 1.3.1
  */
 
 // ============================================
@@ -43,7 +40,7 @@ const app = require('../api/index');
 
 describe('Endpoint Root (/)', () => {
     /**
-     * Test: La root deve restituire 200 OK
+     * Test: La root deve restituire 200 OK con la versione
      */
     test('GET / deve restituire status 200', async () => {
         const response = await request(app)
@@ -51,82 +48,70 @@ describe('Endpoint Root (/)', () => {
             .expect('Content-Type', /json/)
             .expect(200);
 
-        // Verifichiamo che la risposta contenga i campi attesi
-        expect(response.body).toHaveProperty('messaggio');
+        // Verifichiamo che la risposta contenga solo la versione
         expect(response.body).toHaveProperty('versione');
-        expect(response.body).toHaveProperty('versioniAPI');
-        expect(response.body).toHaveProperty('timestamp');
     });
 
     /**
-     * Test: La root deve contenere il messaggio di benvenuto
+     * Test: La root deve contenere la versione corretta
      */
-    test('GET / deve contenere messaggio di benvenuto', async () => {
+    test('GET / deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/');
 
-        expect(response.body.messaggio).toBe('Benvenuto nelle API Voicenotes');
-        expect(response.body.versione).toBe('1.1.0');
+        expect(response.body.versione).toBe('1.3.1');
+    });
+
+    /**
+     * Test: La root non deve contenere altre proprietà
+     */
+    test('GET / deve restituire solo la versione', async () => {
+        const response = await request(app).get('/');
+
+        // Verifichiamo che ci sia solo la proprietà versione
+        expect(Object.keys(response.body)).toEqual(['versione']);
     });
 });
 
 // ============================================
-// GRUPPO TEST: ENDPOINT TEST LEGACY
+// GRUPPO TEST: ENDPOINT LEGACY RIMOSSI (ora 404)
 // ============================================
 
-describe('Endpoint Test Legacy (/test)', () => {
+describe('Endpoint Legacy Rimossi', () => {
     /**
-     * Test: L'endpoint /test deve restituire result: true
+     * Test: L'endpoint /test deve restituire 404
      */
-    test('GET /test deve restituire { result: true }', async () => {
+    test('GET /test deve restituire 404', async () => {
         const response = await request(app)
             .get('/test')
             .expect('Content-Type', /json/)
-            .expect(200);
+            .expect(404);
 
-        expect(response.body).toHaveProperty('result', true);
+        expect(response.body).toHaveProperty('errore', 'Endpoint non trovato');
+        expect(response.body).toHaveProperty('codice', 'NOT_FOUND');
     });
 
     /**
-     * Test: L'endpoint /api/test deve funzionare (legacy)
+     * Test: L'endpoint /api/test deve restituire 404
      */
-    test('GET /api/test deve restituire { result: true }', async () => {
+    test('GET /api/test deve restituire 404', async () => {
         const response = await request(app)
             .get('/api/test')
             .expect('Content-Type', /json/)
-            .expect(200);
+            .expect(404);
 
-        expect(response.body).toHaveProperty('result', true);
+        expect(response.body).toHaveProperty('errore', 'Endpoint non trovato');
     });
-});
 
-// ============================================
-// GRUPPO TEST: ENDPOINT HEALTH GLOBALE
-// ============================================
-
-describe('Endpoint Health Globale (/health)', () => {
     /**
-     * Test: L'endpoint /health deve restituire status healthy
+     * Test: L'endpoint /health globale deve restituire 404
      */
-    test('GET /health deve restituire status healthy', async () => {
+    test('GET /health deve restituire 404', async () => {
         const response = await request(app)
             .get('/health')
             .expect('Content-Type', /json/)
-            .expect(200);
+            .expect(404);
 
-        expect(response.body).toHaveProperty('status', 'healthy');
-        expect(response.body).toHaveProperty('versione');
-        expect(response.body).toHaveProperty('uptime');
-        expect(response.body).toHaveProperty('timestamp');
-    });
-
-    /**
-     * Test: L'uptime deve essere un numero valido
-     */
-    test('GET /health uptime deve essere >= 0', async () => {
-        const response = await request(app).get('/health');
-
-        expect(typeof response.body.uptime).toBe('number');
-        expect(response.body.uptime).toBeGreaterThanOrEqual(0);
+        expect(response.body).toHaveProperty('errore', 'Endpoint non trovato');
     });
 });
 
@@ -706,12 +691,12 @@ describe('API V1 - Endpoint Info aggiornato', () => {
     });
 
     /**
-     * Test: La versione deve essere 1.3.0
+     * Test: La versione deve essere 1.3.1
      */
-    test('GET /v1/info deve restituire versione 1.3.0', async () => {
+    test('GET /v1/info deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/v1/info');
 
-        expect(response.body).toHaveProperty('versioneCompleta', '1.3.0');
+        expect(response.body).toHaveProperty('versioneCompleta', '1.3.1');
     });
 });
 
@@ -750,11 +735,11 @@ describe('API V1 - Health con nuovi servizi', () => {
     });
 
     /**
-     * Test: La versione nell'health deve essere 1.3.0
+     * Test: La versione nell'health deve essere 1.3.1
      */
-    test('GET /v1/health deve restituire versione 1.3.0', async () => {
+    test('GET /v1/health deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/v1/health');
 
-        expect(response.body).toHaveProperty('versione', '1.3.0');
+        expect(response.body).toHaveProperty('versione', '1.3.1');
     });
 });
