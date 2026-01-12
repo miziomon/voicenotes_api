@@ -1,0 +1,197 @@
+###
+# File di test per API REST - Voicenotes API
+# Usa l'estensione REST Client di VSCode per eseguire queste richieste
+# Installa: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+#
+# CONFIGURAZIONE:
+# Le variabili sensibili vengono lette dal file .env (non committato in git).
+# Assicurati di creare un file .env con le seguenti variabili:
+#
+#   TEST_USER_ID=il-tuo-uuid-qui
+#
+# oppure copia .env.example in .env e modifica i valori.
+###
+
+# ==============================================================================
+# VARIABILI DI AMBIENTE
+# ==============================================================================
+
+@baseUrl = http://localhost:3000
+# @baseUrl = https://voicenotes-api.vercel.app  # Uncomment per testare su Vercel
+
+# User ID di test - viene letto dal file .env per evitare commit di dati sensibili
+# Se la variabile non è definita in .env, usa un placeholder che va sostituito
+@testUserId = {{$dotenv TEST_USER_ID}}
+
+# ==============================================================================
+# ENDPOINT ROOT
+# ==============================================================================
+
+### Test root endpoint
+GET {{baseUrl}}/
+
+### Test health check globale
+GET {{baseUrl}}/health
+
+### Test legacy endpoint
+GET {{baseUrl}}/test
+
+# ==============================================================================
+# API v1 - TEST
+# ==============================================================================
+
+### Test endpoint v1
+GET {{baseUrl}}/v1/test
+
+### Test endpoint v1 con messaggio
+GET {{baseUrl}}/v1/test?message=Ciao%20mondo
+
+### Test endpoint v1 in formato text
+GET {{baseUrl}}/v1/test?format=text
+
+# ==============================================================================
+# API v1 - HEALTH & INFO
+# ==============================================================================
+
+### Health check v1 (dettagliato con statistiche servizi)
+GET {{baseUrl}}/v1/health
+
+### Informazioni API v1
+GET {{baseUrl}}/v1/info
+
+# ==============================================================================
+# API v1 - ASK (Assistente AI)
+# ==============================================================================
+
+### Ask - Richiesta base
+POST {{baseUrl}}/v1/ask
+Content-Type: application/json
+
+{
+  "userId": "{{testUserId}}",
+  "query": "Quali sono le mie note più importanti?"
+}
+
+### Ask - Richiesta con tutti i parametri
+POST {{baseUrl}}/v1/ask
+Content-Type: application/json
+
+{
+  "userId": "{{testUserId}}",
+  "query": "Cosa ho registrato riguardo al lavoro?",
+  "threshold": 0.6,
+  "count": 10,
+  "temperature": 0.8,
+  "maxTokens": 1024
+}
+
+### Ask - Soglia alta (risultati più rilevanti)
+POST {{baseUrl}}/v1/ask
+Content-Type: application/json
+
+{
+  "userId": "{{testUserId}}",
+  "query": "Appuntamenti importanti",
+  "threshold": 0.85,
+  "count": 3
+}
+
+# ==============================================================================
+# API v1 - EMBEDDINGS (Generazione Embedding Vettoriali)
+# ==============================================================================
+
+### Embeddings - Richiesta base (default: limit=3)
+# Processa fino a 3 note con status='completed' e embedding=NULL
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{}
+
+### Embeddings - Con limite personalizzato
+# Processa fino a 10 note
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 10
+}
+
+### Embeddings - Modalità DRY-RUN (simulazione senza modifiche)
+# Utile per testare senza scrivere sul database
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 5,
+  "dryRun": true
+}
+
+### Embeddings - Filtro per utente specifico
+# Processa solo le note di un utente specifico
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 10,
+  "userId": "{{testUserId}}"
+}
+
+### Embeddings - Tutti i parametri
+# Combinazione completa di tutti i parametri
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 20,
+  "dryRun": false,
+  "userId": "{{testUserId}}"
+}
+
+### Embeddings - Limite massimo
+# Processa fino a 50 note (limite massimo consentito)
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 50
+}
+
+# ==============================================================================
+# TEST DI ERRORE (per verificare la gestione errori)
+# ==============================================================================
+
+### Ask - Errore: userId mancante
+POST {{baseUrl}}/v1/ask
+Content-Type: application/json
+
+{
+  "query": "Test senza userId"
+}
+
+### Ask - Errore: userId non valido
+POST {{baseUrl}}/v1/ask
+Content-Type: application/json
+
+{
+  "userId": "non-un-uuid",
+  "query": "Test con userId non valido"
+}
+
+### Embeddings - Errore: limit fuori range
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 100
+}
+
+### Embeddings - Errore: userId non valido
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "userId": "non-un-uuid"
+}
+
+### Endpoint non esistente
+GET {{baseUrl}}/v1/endpoint-inesistente

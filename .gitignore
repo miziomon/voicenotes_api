@@ -21,6 +21,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# NOTA: .env.example viene COMMITTATO (è il template)
+!.env.example
+
 # Vercel
 # Cartella generata da Vercel per il deployment locale
 .vercel
@@ -80,4 +83,4 @@ __MACOSX/
 .Trashes
 
 # File di test
-api_tests.http
+# api_tests.http

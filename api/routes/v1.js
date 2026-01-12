@@ -48,6 +48,21 @@ const getAskServiceSafe = () => {
     return askService;
 };
 
+// Importiamo il servizio Embedding (lazy loading per evitare errori se env non configurato)
+let embeddingService = null;
+const getEmbeddingServiceSafe = () => {
+    if (!embeddingService) {
+        try {
+            const { getEmbeddingService } = require('../services/embeddingService');
+            embeddingService = getEmbeddingService();
+        } catch (error) {
+            logger.error(`Errore caricamento EmbeddingService: ${error.message}`);
+            return null;
+        }
+    }
+    return embeddingService;
+};
+
 // ============================================
 // SCHEMA VALIDAZIONE PER /v1/ask
 // ============================================
@@ -137,12 +152,53 @@ const askSchema = Joi.object({
 }).messages(messaggiErrore);
 
 // ============================================
+// SCHEMA VALIDAZIONE PER /v1/embeddings
+// ============================================
+
+/**
+ * Schema Joi per la validazione del body della richiesta /v1/embeddings
+ *
+ * Parametri opzionali:
+ * - limit: Numero massimo di note da processare (1-50, default 3)
+ * - dryRun: Se true, simula senza scrivere sul database (default false)
+ * - userId: UUID dell'utente per filtrare le note (opzionale)
+ */
+const embeddingsSchema = Joi.object({
+    // Limit - numero massimo di note da processare
+    limit: Joi.number()
+        .integer()
+        .min(1)
+        .max(50)
+        .default(3)
+        .messages({
+            ...messaggiErrore,
+            'number.min': 'limit deve essere almeno 1',
+            'number.max': 'limit non può superare 50'
+        }),
+
+    // Dry Run - modalità simulazione
+    dryRun: Joi.boolean()
+        .default(false)
+        .messages(messaggiErrore),
+
+    // User ID - opzionale, deve essere un UUID valido se fornito
+    userId: Joi.string()
+        .guid({ version: ['uuidv4'] })
+        .optional()
+        .messages({
+            ...messaggiErrore,
+            'string.guid': 'userId deve essere un UUID v4 valido'
+        })
+}).messages(messaggiErrore);
+
+// ============================================
 // VARIABILI PER MONITORAGGIO UPTIME
 // ============================================
 
 const startTime = Date.now();
 let richiesteProcessate = 0;
 let richiesteAsk = 0;
+let richiesteEmbeddings = 0;
 
 // ============================================
 // MIDDLEWARE SPECIFICI PER V1
@@ -282,6 +338,94 @@ router.post('/ask', strictLimiter, validaInput(askSchema, 'body'), async (req, r
 });
 
 // ============================================
+// ENDPOINT: POST /v1/embeddings
+// ============================================
+
+/**
+ * Endpoint per la generazione di embedding delle note vocali
+ *
+ * Route: POST /v1/embeddings
+ * Descrizione: Processa le note con status='completed' e embedding=NULL,
+ *              generando embedding vettoriali con Google Gemini e
+ *              aggiornando il campo embedding su Supabase.
+ *
+ * Body JSON (tutti opzionali):
+ * {
+ *   "limit": 3,                   // Max note da processare (1-50, default 3)
+ *   "dryRun": false,              // Se true, simula senza scrivere (default false)
+ *   "userId": "uuid-v4"           // Filtra per utente specifico (opzionale)
+ * }
+ *
+ * Risposta JSON:
+ * {
+ *   "result": true/false,
+ *   "message": "...",
+ *   "stats": {
+ *     "totalFound": 3,
+ *     "processed": 3,
+ *     "errors": 0,
+ *     "skippedEmpty": 0,
+ *     "skippedTooLong": 0,
+ *     "apiCalls": 3
+ *   },
+ *   "duration": 1234
+ * }
+ */
+router.post('/embeddings', strictLimiter, validaInput(embeddingsSchema, 'body'), async (req, res) => {
+    richiesteEmbeddings++;
+    const requestStartTime = Date.now();
+
+    const { limit, dryRun, userId } = req.body;
+
+    logger.info(`Richiesta /v1/embeddings - limit: ${limit}, dryRun: ${dryRun}, userId: ${userId || 'tutti'}`);
+
+    try {
+        // Ottieni il servizio Embedding
+        const service = getEmbeddingServiceSafe();
+
+        if (!service) {
+            logger.error('EmbeddingService non disponibile');
+            return res.status(503).json({
+                result: false,
+                error: {
+                    code: 'SERVICE_UNAVAILABLE',
+                    message: 'Il servizio Embedding non è attualmente disponibile. Verifica la configurazione delle variabili ambiente.'
+                },
+                timestamp: new Date().toISOString(),
+                processingTimeMs: Date.now() - requestStartTime
+            });
+        }
+
+        // Esegui il processo di embedding
+        const result = await service.processEmbeddings({
+            limit,
+            dryRun,
+            userId
+        });
+
+        // Aggiungi timestamp alla risposta
+        result.timestamp = new Date().toISOString();
+
+        // Restituisci la risposta con lo status code appropriato
+        const statusCode = result.result ? 200 : (result.error ? 400 : 500);
+        res.status(statusCode).json(result);
+
+    } catch (error) {
+        logger.error(`Errore /v1/embeddings: ${error.message}`);
+
+        res.status(500).json({
+            result: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message: 'Si è verificato un errore interno. Riprova più tardi.'
+            },
+            timestamp: new Date().toISOString(),
+            processingTimeMs: Date.now() - requestStartTime
+        });
+    }
+});
+
+// ============================================
 // ENDPOINT: GET /v1/health
 // ============================================
 
@@ -315,9 +459,24 @@ router.get('/health', (req, res) => {
         askServiceStatus = 'error';
     }
 
+    // Verifica stato servizio Embedding
+    let embeddingServiceStatus = 'unknown';
+    let embeddingServiceConfig = null;
+    try {
+        const service = getEmbeddingServiceSafe();
+        if (service) {
+            embeddingServiceStatus = 'healthy';
+            embeddingServiceConfig = service.getConfig();
+        } else {
+            embeddingServiceStatus = 'unavailable';
+        }
+    } catch (error) {
+        embeddingServiceStatus = 'error';
+    }
+
     const healthInfo = {
         status: 'healthy',
-        versione: '1.2.0',
+        versione: '1.3.0',
         ambiente: process.env.NODE_ENV || 'development',
 
         uptime: {
@@ -333,13 +492,18 @@ router.get('/health', (req, res) => {
 
         statistiche: {
             richiesteProcessate,
-            richiesteAsk
+            richiesteAsk,
+            richiesteEmbeddings
         },
 
         servizi: {
             askService: {
                 status: askServiceStatus,
                 stats: askServiceStats
+            },
+            embeddingService: {
+                status: embeddingServiceStatus,
+                config: embeddingServiceConfig
             }
         },
 
@@ -379,8 +543,8 @@ router.get('/info', (req, res) => {
     res.status(200).json({
         nome: 'Voicenotes API',
         versione: '1',
-        versioneCompleta: '1.2.0',
-        descrizione: 'API per Voicenotes con AI - Ricerca semantica e assistente Gemini',
+        versioneCompleta: '1.3.0',
+        descrizione: 'API per Voicenotes con AI - Ricerca semantica, assistente Gemini e embedding vettoriali',
         endpoints: {
             test: {
                 path: '/v1/test',
@@ -402,6 +566,16 @@ router.get('/info', (req, res) => {
                     count: 'Numero max note 1-20 (opzionale, default 5)',
                     temperature: 'Creatività risposta 0.0-1.0 (opzionale, default 0.7)',
                     maxTokens: 'Lunghezza max risposta 100-4096 (opzionale, default 2048)'
+                }
+            },
+            embeddings: {
+                path: '/v1/embeddings',
+                metodo: 'POST',
+                descrizione: 'Genera embedding vettoriali per le note vocali',
+                body: {
+                    limit: 'Numero max note da processare 1-50 (opzionale, default 3)',
+                    dryRun: 'Se true, simula senza scrivere sul DB (opzionale, default false)',
+                    userId: 'UUID v4 per filtrare per utente (opzionale)'
                 }
             },
             health: {

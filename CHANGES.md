@@ -4,6 +4,145 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.3.0] - 12 Gennaio 2026
+
+### 🚀 Nuovo Endpoint: POST /v1/embeddings - Generazione Embedding Vettoriali
+
+#### Descrizione
+Implementato nuovo endpoint che replica il comportamento dello script Python `process_embeddings.py` per generare embedding vettoriali delle note vocali. Questo endpoint:
+- Recupera le note con `status='completed'` e `embedding=NULL`
+- Genera embedding utilizzando Google Gemini (`gemini-embedding-001`)
+- Aggiorna il campo `embedding` nella tabella `notes` su Supabase
+
+#### Endpoint
+```
+POST /v1/embeddings
+Content-Type: application/json
+```
+
+#### Body della Richiesta (tutti i parametri sono opzionali)
+```json
+{
+  "limit": 3,                                      // Max note da processare (1-50, default 3)
+  "dryRun": false,                                 // Se true, simula senza scrivere (default false)
+  "userId": "2198e343-eeeb-4361-be3b-7c8a826e193a" // Filtra per utente (opzionale)
+}
+```
+
+#### Risposta
+```json
+{
+  "result": true,
+  "message": "Processate 3 note con successo",
+  "stats": {
+    "totalFound": 3,
+    "processed": 3,
+    "errors": 0,
+    "skippedEmpty": 0,
+    "skippedTooLong": 0,
+    "apiCalls": 3
+  },
+  "duration": 4523,
+  "timestamp": "2026-01-12T10:30:00.000Z"
+}
+```
+
+#### Funzionalità Implementate
+
+1. **Generazione Embedding con Gemini**
+   - Modello: `gemini-embedding-001`
+   - Dimensione vettore: **1536** (compatibile con pgvector)
+   - Task type: `RETRIEVAL_DOCUMENT` (ottimizzato per indicizzazione documenti)
+
+2. **Costruzione Testo Combinato**
+   - Combina: `Title | Excerpt | Category | Tags | Content (transcription)`
+   - Stessa logica dello script Python originale
+   - Limite massimo testo: 8000 caratteri
+
+3. **Modalità Dry-Run**
+   - Parametro `dryRun: true` per testare senza modificare il database
+   - Utile per verificare quali note verrebbero processate
+
+4. **Filtro per Utente**
+   - Parametro opzionale `userId` per processare solo le note di un utente specifico
+   - Validazione UUID v4
+
+5. **Logging Dettagliato**
+   - Log generico su `combined-*.log` e `http-*.log` (come altre API)
+   - **Log verboso dedicato** su `logs/embeddings.log` con:
+     - Dettaglio di ogni nota processata
+     - Note saltate (vuote o troppo lunghe)
+     - Errori specifici
+     - Report finale con statistiche
+
+6. **Retry con Backoff Esponenziale**
+   - Massimo 3 tentativi per errori temporanei
+   - Backoff esponenziale (2s, 4s, 8s)
+   - Non ritenta per errori di validazione/autenticazione
+
+7. **Rate Limiting Specifico**
+   - Utilizza `strictLimiter` (10 req/15min) per proteggere l'endpoint
+   - Delay di 200ms tra le chiamate API per evitare rate limiting Gemini
+
+#### Nuovi File
+```
+api/
+└── services/
+    └── embeddingService.js    # Servizio principale per /v1/embeddings
+```
+
+#### File Modificati
+- `api/routes/v1.js` - Aggiunto endpoint e schema validazione
+- `api_tests.http` - Aggiunti esempi di utilizzo
+
+#### Statistiche Risposta
+
+| Campo | Descrizione |
+|-------|-------------|
+| `totalFound` | Note trovate da processare |
+| `processed` | Note processate con successo |
+| `errors` | Note con errori |
+| `skippedEmpty` | Note saltate (nessun contenuto) |
+| `skippedTooLong` | Note saltate (testo > 8000 caratteri) |
+| `apiCalls` | Numero chiamate API Gemini effettuate |
+
+#### Codici Errore
+
+| Codice | Descrizione |
+|--------|-------------|
+| `USER_ID_INVALID` | L'userId fornito non è un UUID valido |
+| `SERVICE_UNAVAILABLE` | Servizio Embedding non disponibile |
+| `INTERNAL_ERROR` | Errore interno generico |
+
+#### Esempi Utilizzo (api_tests.http)
+
+```http
+### Processa 3 note (default)
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{}
+
+### Processa 10 note
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 10
+}
+
+### Modalità simulazione
+POST {{baseUrl}}/v1/embeddings
+Content-Type: application/json
+
+{
+  "limit": 5,
+  "dryRun": true
+}
+```
+
+---
+
 ## [1.2.0] - 10 Gennaio 2026
 
 ### 🚀 Nuovo Endpoint: POST /v1/ask - Assistente AI per Note Vocali
@@ -350,4 +489,4 @@ Il progetto segue il **Semantic Versioning** (SemVer):
 
 ---
 
-**Ultimo aggiornamento**: 10 Gennaio 2026
+**Ultimo aggiornamento**: 12 Gennaio 2026

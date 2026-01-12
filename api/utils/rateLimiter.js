@@ -85,9 +85,15 @@ const globalLimiter = rateLimit({
 
     // Salta il rate limiting per alcune richieste (opzionale)
     skip: (req) => {
-        // Esempio: salta il rate limit per l'endpoint /health
-        // Questo permette al monitoraggio di funzionare sempre
-        return req.path === '/health' || req.path === '/v1/health';
+        // Salta il rate limit per l'endpoint /health (permette al monitoraggio di funzionare sempre)
+        if (req.path === '/health' || req.path === '/v1/health') {
+            return true;
+        }
+        // Salta il rate limit in ambiente di test per permettere ai test automatici di funzionare
+        if (process.env.NODE_ENV === 'test') {
+            return true;
+        }
+        return false;
     }
 });
 
@@ -128,6 +134,11 @@ const strictLimiter = rateLimit({
     handler: (req, res, next, options) => {
         logger.warn(`Rate limit STRICT superato per IP: ${req.ip} - Endpoint: ${req.originalUrl}`);
         res.status(options.statusCode).json(options.message);
+    },
+
+    // Salta il rate limit in ambiente di test
+    skip: (req) => {
+        return process.env.NODE_ENV === 'test';
     }
 });
 
@@ -162,6 +173,11 @@ const apiLimiter = rateLimit({
     handler: (req, res, next, options) => {
         logger.warn(`Rate limit API superato per IP: ${req.ip} - Endpoint: ${req.originalUrl}`);
         res.status(options.statusCode).json(options.message);
+    },
+
+    // Salta il rate limit in ambiente di test
+    skip: (req) => {
+        return process.env.NODE_ENV === 'test';
     }
 });
 
