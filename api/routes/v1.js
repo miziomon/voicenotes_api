@@ -528,20 +528,54 @@ router.post('/embeddings', strictLimiter, validaInput(embeddingsSchema, 'body'),
  * 3. protectFromDangerousMethods - Blocca SQL pericolosi (TRUNCATE, DROP, ALTER, etc.)
  * 4. validateTableAccess - Whitelist/Blacklist tabelle
  */
-router.post(
-    '/supabase-proxy',
+/**
+ * Endpoint Proxy Trasparente per Supabase (Gateway & RPC)
+ *
+ * Route: ALL /v1/supabase-proxy*
+ *
+ * Supporta due modalità:
+ * 1. Gateway Mode (Default per client Supabase):
+ *    GET /v1/supabase-proxy/rest/v1/notes?select=*
+ *    -> Inoltrata direttamente a Supabase
+ *
+ * 2. RPC Mode (Legacy):
+ *    POST /v1/supabase-proxy con body JSON { method, path, query }
+ *    -> Parsata e inoltrata
+ */
+router.all(
+    ['/supabase-proxy', '/supabase-proxy/*'],
     proxyLimiter,
-    validaInput(supabaseProxySchema, 'body'),
+    // Validazione condizionale: Solo per chiamate RPC (senza subpath) validiamo il body
+    (req, res, next) => {
+        // Se c'è un subpath (es: /rest/v1/...), siamo in Gateway mode -> Skip validazione body
+        // req.path contiene il path relativo al router (es: /supabase-proxy o /supabase-proxy/rest/...)
+        const pathSuffix = req.path.replace('/supabase-proxy', '');
+
+        if (pathSuffix.length > 1) { // > 1 per gestire eventuale slash finale
+            return next();
+        }
+
+        // Altrimenti RPC mode -> Validiamo body
+        return validaInput(supabaseProxySchema, 'body')(req, res, next);
+    },
     protectFromDangerousMethods,
     validateTableAccess,
     async (req, res) => {
         richiesteProxy++;
         const requestStartTime = Date.now();
 
-        const { method, path, headers, body, query } = req.body;
+        // Determiniamo se Gateway o RPC per loggare correttamente
+        const isGatewayMode = req.path.replace('/supabase-proxy', '').length > 1;
+        let method, path;
 
-        logger.info(`➡️  Richiesta Proxy: ${method} ${path} - IP: ${req.ip}`);
-        logger.debug(`Proxy Request Details: ${JSON.stringify({ method, path, query: Object.keys(query || {}) })}`);
+        if (isGatewayMode) {
+            method = req.method;
+            path = req.path;
+        } else {
+            ({ method, path } = req.body);
+        }
+
+        logger.info(`➡️  Richiesta Proxy (${isGatewayMode ? 'Gateway' : 'RPC'}): ${method} ${path} - IP: ${req.ip}`);
 
         try {
             // Inoltra la richiesta a Supabase tramite il servizio proxy
@@ -563,16 +597,31 @@ router.post(
                 });
             }
 
-            // Restituiamo la risposta con lo status code da Supabase
-            res.status(result.statusCode).json({
-                success: result.success,
-                statusCode: result.statusCode,
-                statusText: result.statusText,
-                data: result.data,
-                headers: result.headers,
-                duration: result.duration,
-                timestamp: new Date().toISOString()
-            });
+            // In Gateway mode, alcuni client si aspettano lo status code diretto, non in JSON
+            // Ma per coerenza e trasparenza, forwardToSupabase restituisce già i dati 'grezzi'
+            // se non sono JSON validi.
+
+            // Se la risposta è JSON, la inoltriamo come JSON
+            if (result.headers && result.headers['content-type'] && result.headers['content-type'].includes('application/json')) {
+                // Se siamo in Gateway mode, restituiamo direttamente i dati (come Supabase)
+                // Se in RPC mode, incapsuliamo
+                if (isGatewayMode) {
+                    return res.status(result.statusCode).json(result.data);
+                } else {
+                    return res.status(result.statusCode).json({
+                        success: result.success,
+                        statusCode: result.statusCode,
+                        data: result.data,
+                        headers: result.headers,
+                        duration: result.duration,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+
+            // Risposta NON JSON (blob, text, etc)
+            // Inviamo direttamente il dato raw
+            res.status(result.statusCode).send(result.data);
 
         } catch (error) {
             const processingTime = Date.now() - requestStartTime;
@@ -581,17 +630,9 @@ router.post(
             logger.error(`Stack trace: ${error.stack}`);
 
             res.status(500).json({
-                success: false,
-                statusCode: 500,
-                statusText: 'Internal Server Error',
-                data: null,
-                error: {
-                    code: 'PROXY_ERROR',
-                    message: 'Errore durante l\'inoltro della richiesta a Supabase',
-                    details: error.message
-                },
-                duration: processingTime,
-                timestamp: new Date().toISOString()
+                error: 'Internal Proxy Error',
+                message: error.message,
+                code: 'PROXY_INTERNAL_ERROR'
             });
         }
     }

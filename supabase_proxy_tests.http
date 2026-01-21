@@ -12,7 +12,9 @@
 ###############################################################################
 
 # Variabili di ambiente (caricate da .env)
-@baseUrl = http://localhost:3000
+#@baseUrl = http://localhost:3000
+@baseUrl = https://voicenotes-api.vercel.app/
+
 @userId = {{$dotenv TEST_USER_ID}}
 
 ###############################################################################
@@ -358,10 +360,32 @@ Content-Type: application/json
 }
 
 ###############################################################################
-# NOTE FINALI
+# 11. NUOVA MODALITÀ GATEWAY (Compatibile con Supabase Client)
 ###############################################################################
-#
-# CONFIGURAZIONE VARIABILI .env PER I TEST:
+
+### 11.1 - Gateway GET (Simulazione Client Supabase)
+# URL diretto come farebbe @supabase/supabase-js
+GET {{baseUrl}}/v1/supabase-proxy/rest/v1/notes?select=*&limit=1
+Content-Type: application/json
+apikey: {{userId}}
+# Nota: l'header apikey qui è solo simulato, il proxy userà SERVICE_ROLE
+
+### 11.2 - Gateway POST (Insert)
+POST {{baseUrl}}/v1/supabase-proxy/rest/v1/notes
+Content-Type: application/json
+Prefer: return=representation
+
+{
+    "user_id": "{{userId}}",
+    "title": "Nota Gateway Test",
+    "transcription": "Creata via Gateway Mode",
+    "status": "completed"
+}
+
+### 11.3 - Gateway DELETE
+DELETE {{baseUrl}}/v1/supabase-proxy/rest/v1/notes?id=eq.ID_DA_CANCELLARE
+Content-Type: application/json
+
 #
 # 1. WHITELIST VUOTA (tutte le tabelle permesse):
 #    PROXY_TABLES_WHITELIST=

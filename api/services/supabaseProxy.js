@@ -136,24 +136,56 @@ const forwardToSupabase = async (req) => {
         // STEP 1: ESTRAZIONE INFORMAZIONI DALLA RICHIESTA
         // ============================================
 
-        const {
-            method = 'GET',
-            path = '/rest/v1/',
-            headers = {},
-            body = null,
-            query = {}
-        } = req.body || {};
+        let method, targetPath, headers, body, query;
 
-        // Path completo verso Supabase
-        const targetPath = path || '/rest/v1/';
+        // Rileviamo se siamo in modalità "Gateway REST" (URL diretto) o "JSON RPC" (payload)
+        const isGatewayMode = req.path.includes('/rest/v1') || req.path.includes('/auth/v1') || req.path.includes('/storage/v1');
+
+        if (isGatewayMode) {
+            // MODALITÀ GATEWAY: Parametri dalla richiesta HTTP reale
+            method = req.method;
+
+            // Rimuoviamo il prefisso /v1/supabase-proxy dal path
+            // Esempio: /v1/supabase-proxy/rest/v1/notes -> /rest/v1/notes
+            targetPath = req.url.replace(/^\/?v1\/supabase-proxy/, '') || '/rest/v1/';
+
+            // Se targetPath inizia con // puliamolo
+            if (targetPath.startsWith('//')) targetPath = targetPath.substring(1);
+
+            headers = req.headers;
+            body = req.body;
+            query = req.query;
+
+            proxyLogger.info(`🔄 Modalità Gateway rilevata: ${method} ${targetPath}`);
+        } else {
+            // MODALITÀ JSON RPC (Legacy/Custom): Parametri dal body JSON
+            ({
+                method = 'GET',
+                path: targetPath = '/rest/v1/',
+                headers = {},
+                body = null,
+                query = {}
+            } = req.body || {});
+        }
 
         // Costruiamo l'URL completo con query parameters
+        // Nota: in Gateway Mode query params sono già nel query object di Express o nell'URL
         const url = new URL(targetPath, SUPABASE_URL);
 
-        // Aggiungiamo i query parameters alla URL
-        if (query && typeof query === 'object') {
+        // Se siamo in modalità Gateway, i query params potrebbero non essere stati parsati se nell'URL
+        if (!isGatewayMode && query && typeof query === 'object') {
             Object.keys(query).forEach(key => {
                 url.searchParams.append(key, query[key]);
+            });
+        }
+        // In gateway mode, se ci sono query params passati da Express
+        if (isGatewayMode && req.query && Object.keys(req.query).length > 0) {
+            // Express parsifica già i query params, li riaggiungiamo all'URL Supabase
+            Object.keys(req.query).forEach(key => {
+                // Evitiamo duplicati se già presenti nel path
+                if (!url.searchParams.has(key)) {
+                    url.searchParams.append(key, req.query[key]);
+                }
             });
         }
 

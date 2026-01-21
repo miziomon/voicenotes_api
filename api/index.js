@@ -89,11 +89,11 @@ app.use((req, res, next) => {
     // Permettiamo richieste da qualsiasi origine
     res.header('Access-Control-Allow-Origin', '*');
 
-    // Specifichiamo gli header permessi
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    // Specifichiamo gli header permessi (inclusi quelli specifici di Supabase)
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, x-client-info, x-supabase-auth, preference, range, content-range');
 
-    // Specifichiamo i metodi HTTP permessi
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    // Specifichiamo i metodi HTTP permessi (incluso PATCH che è usato molto da Supabase)
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
 
     // Aggiungiamo header di sicurezza base
     res.header('X-Content-Type-Options', 'nosniff');
