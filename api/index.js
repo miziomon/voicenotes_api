@@ -91,7 +91,7 @@ app.use((req, res, next) => {
 
     // Specifichiamo gli header permessi (inclusi quelli specifici di Supabase)
     // NOTA: Aggiunto 'Prefer' (richiesto da Supabase) oltre a 'preference'
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, x-client-info, x-supabase-auth, preference, prefer, range, content-range');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, x-client-info, x-supabase-auth, preference, prefer, range, content-range, cache-control, pragma, expires');
 
     // Specifichiamo i metodi HTTP permessi (incluso PATCH che è usato molto da Supabase)
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
