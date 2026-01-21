@@ -157,12 +157,12 @@ const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
 
     // 30 richieste al minuto
-    max: 30,
+    max: 120,
 
     message: {
         errore: 'Limite API superato',
         messaggio: 'Hai superato il limite di richieste API. Attendi un minuto.',
-        limite: '30 richieste al minuto',
+        limite: '120 richieste al minuto',
         codice: 'API_RATE_LIMIT_EXCEEDED'
     },
 
@@ -203,12 +203,12 @@ const proxyLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
 
     // 50 richieste al minuto - sufficiente per un'app single-page
-    max: 50,
+    max: 120,
 
     message: {
         errore: 'Limite richieste proxy superato',
         messaggio: 'Hai superato il limite di richieste al proxy Supabase. Attendi un minuto.',
-        limite: '50 richieste al minuto',
+        limite: '120 richieste al minuto',
         codice: 'PROXY_RATE_LIMIT_EXCEEDED'
     },
 
