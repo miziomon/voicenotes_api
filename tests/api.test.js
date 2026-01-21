@@ -28,6 +28,9 @@
 // IMPORTAZIONE DELLE DIPENDENZE
 // ============================================
 
+// Importiamo package.json per leggere la versione dinamicamente
+const packageJson = require('../package.json');
+
 // Supertest permette di testare le richieste HTTP
 const request = require('supertest');
 
@@ -53,12 +56,12 @@ describe('Endpoint Root (/)', () => {
     });
 
     /**
-     * Test: La root deve contenere la versione corretta
+     * Test: La root deve contenere la versione corretta (dinamica)
      */
-    test('GET / deve restituire versione 1.3.1', async () => {
+    test('GET / deve restituire versione corretta', async () => {
         const response = await request(app).get('/');
 
-        expect(response.body.versione).toBe('1.4.0');
+        expect(response.body.versione).toBe(packageJson.version);
     });
 
     /**
@@ -693,10 +696,10 @@ describe('API V1 - Endpoint Info aggiornato', () => {
     /**
      * Test: La versione deve essere 1.3.1
      */
-    test('GET /v1/info deve restituire versione 1.3.1', async () => {
+    test('GET /v1/info deve restituire versione corretta', async () => {
         const response = await request(app).get('/v1/info');
 
-        expect(response.body).toHaveProperty('versioneCompleta', '1.4.0');
+        expect(response.body).toHaveProperty('versioneCompleta', packageJson.version);
     });
 });
 
@@ -737,9 +740,9 @@ describe('API V1 - Health con nuovi servizi', () => {
     /**
      * Test: La versione nell'health deve essere 1.3.1
      */
-    test('GET /v1/health deve restituire versione 1.3.1', async () => {
+    test('GET /v1/health deve restituire versione corretta', async () => {
         const response = await request(app).get('/v1/health');
 
-        expect(response.body).toHaveProperty('versione', '1.4.0');
+        expect(response.body).toHaveProperty('versione', packageJson.version);
     });
 });

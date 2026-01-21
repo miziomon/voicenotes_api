@@ -93,16 +93,36 @@ const extractTableName = (path) => {
  * @returns {Object} - { allowed: boolean, reason: string }
  */
 const isTableAllowed = (tableName) => {
+    // CONTROLLO 1: Se whitelist è vuota, tutte le tabelle (anche non identificate) sono OK
+    // Questo permette al proxy di funzionare anche senza identificazione tabella
+    if (WHITELIST.length === 0 && BLACKLIST.length === 0) {
+        return {
+            allowed: true,
+            reason: 'Whitelist e Blacklist vuote - tutte le richieste sono permesse'
+        };
+    }
+
+    // CONTROLLO 2: Se non riusciamo a identificare la tabella
+    // ma c'è una whitelist o blacklist configurata, blocchiamo per sicurezza
     if (!tableName) {
+        // Se c'è solo blacklist (whitelist vuota), permettiamo
+        if (WHITELIST.length === 0 && BLACKLIST.length > 0) {
+            return {
+                allowed: true,
+                reason: 'Whitelist vuota e tabella non identificata - permessa (solo blacklist attiva)'
+            };
+        }
+
+        // Se c'è whitelist configurata, blocchiamo se non identifichiamo la tabella
         return {
             allowed: false,
-            reason: 'Nome della tabella non identificato nella richiesta'
+            reason: 'Nome della tabella non identificato nella richiesta e whitelist configurata'
         };
     }
 
     const tableNameLower = tableName.toLowerCase();
 
-    // CONTROLLO 1: Blacklist ha priorità assoluta
+    // CONTROLLO 3: Blacklist ha priorità assoluta
     if (BLACKLIST.length > 0 && BLACKLIST.includes(tableNameLower)) {
         return {
             allowed: false,
@@ -110,7 +130,7 @@ const isTableAllowed = (tableName) => {
         };
     }
 
-    // CONTROLLO 2: Se whitelist è vuota, tutte le tabelle (non in blacklist) sono OK
+    // CONTROLLO 4: Se whitelist è vuota, tutte le tabelle (non in blacklist) sono OK
     if (WHITELIST.length === 0) {
         return {
             allowed: true,
@@ -118,7 +138,7 @@ const isTableAllowed = (tableName) => {
         };
     }
 
-    // CONTROLLO 3: Se whitelist ha valori, la tabella deve essere nella lista
+    // CONTROLLO 5: Se whitelist ha valori, la tabella deve essere nella lista
     if (WHITELIST.includes(tableNameLower)) {
         return {
             allowed: true,
@@ -126,7 +146,7 @@ const isTableAllowed = (tableName) => {
         };
     }
 
-    // CONTROLLO 4: Tabella non in whitelist → blocca
+    // CONTROLLO 6: Tabella non in whitelist → blocca
     return {
         allowed: false,
         reason: `La tabella '${tableName}' non è nella whitelist delle tabelle autorizzate`

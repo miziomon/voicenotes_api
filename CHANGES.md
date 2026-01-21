@@ -306,6 +306,11 @@ Il codice è stato strutturato in modo modulare per facilitare l'integrazione fu
 - **Cache** per riduzionecarico Supabase
 - **Audit logging** avanzato
 
+#### 🛠️ Bugfix Critici
+- **Fix Whitelist:** Corretto bug in `tableWhitelist.js` che bloccava tutte le richieste quando la whitelist era vuota (ora permette tutte le tabelle come da specifica).
+- **Fix Sanitizzazione URL:** Rimossa sanitizzazione aggressiva in `validator.js` che convertiva `/` in `&#x2F;`, rompendo i percorsi Supabase.
+- **Test Suite:** Aggiornati i test automatici per leggere la versione dinamicamente da `package.json`.
+
 ---
 
 ## [1.3.1] - 12 Gennaio 2026
