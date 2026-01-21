@@ -46,7 +46,7 @@ const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
 
     // Numero massimo di richieste per finestra temporale
-    max: 100,
+    max: 1500,
 
     // Messaggio di errore quando il limite viene superato
     message: {
