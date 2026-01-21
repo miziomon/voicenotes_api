@@ -182,6 +182,52 @@ const apiLimiter = rateLimit({
 });
 
 // ============================================
+// RATE LIMITER PER SUPABASE PROXY
+// ============================================
+
+/**
+ * Rate limiter dedicato per il proxy Supabase
+ *
+ * Questo limiter è configurato appositamente per l'endpoint proxy
+ * che inoltra le richieste a Supabase.
+ *
+ * Configurazione:
+ * - windowMs: 1 minuto
+ * - max: 50 richieste per finestra
+ *
+ * Il limite è più permissivo del strictLimiter ma più controllato
+ * del globalLimiter, per bilanciare usabilità e sicurezza.
+ */
+const proxyLimiter = rateLimit({
+    // Finestra temporale di 1 minuto
+    windowMs: 1 * 60 * 1000,
+
+    // 50 richieste al minuto - sufficiente per un'app single-page
+    max: 50,
+
+    message: {
+        errore: 'Limite richieste proxy superato',
+        messaggio: 'Hai superato il limite di richieste al proxy Supabase. Attendi un minuto.',
+        limite: '50 richieste al minuto',
+        codice: 'PROXY_RATE_LIMIT_EXCEEDED'
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+
+    handler: (req, res, next, options) => {
+        logger.warn(`Rate limit PROXY superato per IP: ${req.ip} - Endpoint: ${req.originalUrl}`);
+        res.status(options.statusCode).json(options.message);
+    },
+
+    // Salta il rate limit in ambiente di test
+    skip: (req) => {
+        return process.env.NODE_ENV === 'test';
+    }
+});
+
+// ============================================
 // ESPORTAZIONE DEL MODULO
 // ============================================
 
@@ -189,5 +235,6 @@ const apiLimiter = rateLimit({
 module.exports = {
     globalLimiter,
     strictLimiter,
-    apiLimiter
+    apiLimiter,
+    proxyLimiter
 };

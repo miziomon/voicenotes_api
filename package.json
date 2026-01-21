@@ -1,7 +1,7 @@
 {
   "name": "voicenotes-api",
-  "version": "1.2.0",
-  "description": "API per Voicenotes con AI - Ricerca semantica e assistente Gemini",
+  "version": "1.4.0",
+  "description": "API per Voicenotes con AI, Supabase Proxy e Ricerca semantica",
   "main": "api/index.js",
   "scripts": {
     "dev": "node api/index.js",

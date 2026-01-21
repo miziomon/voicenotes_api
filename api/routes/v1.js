@@ -14,7 +14,7 @@
  * - POST /v1/ask    - Assistente AI per note vocali
  *
  * @author Voicenotes API Team
- * @version 1.2.0
+ * @version 1.4.0
  */
 
 // ============================================
@@ -28,7 +28,14 @@ const router = express.Router();
 const { logger } = require('../utils/logger');
 
 // Importiamo il rate limiter per le API versionate
-const { apiLimiter, strictLimiter } = require('../utils/rateLimiter');
+const { apiLimiter, strictLimiter, proxyLimiter } = require('../utils/rateLimiter');
+
+// Importiamo i middleware di sicurezza per il proxy
+const { validateTableAccess } = require('../middleware/tableWhitelist');
+const { protectFromDangerousMethods } = require('../middleware/methodProtection');
+
+// Importiamo il servizio Proxy Supabase
+const { forwardToSupabase } = require('../services/supabaseProxy');
 
 // Importiamo il validatore per la validazione degli input
 const { validaInput, sanitizzaInput, schemas, Joi, messaggiErrore } = require('../utils/validator');
@@ -192,6 +199,66 @@ const embeddingsSchema = Joi.object({
 }).messages(messaggiErrore);
 
 // ============================================
+// SCHEMA VALIDAZIONE PER /v1/supabase-proxy
+// ============================================
+
+/**
+ * Schema Joi per la validazione del body della richiesta /v1/supabase-proxy
+ *
+ * Questo schema accetta una richiesta in formato compatibile con Supabase REST API
+ * permettendo trasparenza totale con @supabase/supabase-js
+ *
+ * Parametri:
+ * - method: Metodo HTTP (GET, POST, PUT, PATCH, DELETE)
+ * - path: Path della richiesta (es: /rest/v1/notes)
+ * - headers: Headers opzionali da passare
+ * - body: Body della richiesta (per POST/PUT/PATCH)
+ * - query: Query parameters (es: { select: '*', limit: 10 })
+ */
+const supabaseProxySchema = Joi.object({
+    // Metodo HTTP
+    method: Joi.string()
+        .valid('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD')
+        .default('GET')
+        .messages({
+            ...messaggiErrore,
+            'any.only': 'method deve essere uno tra: GET, POST, PUT, PATCH, DELETE, HEAD'
+        }),
+
+    // Path della richiesta (es: /rest/v1/notes)
+    path: Joi.string()
+        .min(1)
+        .max(500)
+        .default('/rest/v1/')
+        .messages({
+            ...messaggiErrore,
+            'string.min': 'path non può essere vuoto',
+            'string.max': 'path non può superare 500 caratteri'
+        }),
+
+    // Headers personalizzati (opzionali)
+    headers: Joi.object()
+        .optional()
+        .messages(messaggiErrore),
+
+    // Body della richiesta (opzionale, per POST/PUT/PATCH)
+    body: Joi.alternatives()
+        .try(
+            Joi.object(),
+            Joi.array(),
+            Joi.string(),
+            Joi.any().allow(null)
+        )
+        .optional()
+        .messages(messaggiErrore),
+
+    // Query parameters (opzionali)
+    query: Joi.object()
+        .optional()
+        .messages(messaggiErrore)
+}).messages(messaggiErrore);
+
+// ============================================
 // VARIABILI PER MONITORAGGIO UPTIME
 // ============================================
 
@@ -199,6 +266,7 @@ const startTime = Date.now();
 let richiesteProcessate = 0;
 let richiesteAsk = 0;
 let richiesteEmbeddings = 0;
+let richiesteProxy = 0;
 
 // ============================================
 // MIDDLEWARE SPECIFICI PER V1
@@ -426,6 +494,110 @@ router.post('/embeddings', strictLimiter, validaInput(embeddingsSchema, 'body'),
 });
 
 // ============================================
+// ENDPOINT: POST /v1/supabase-proxy
+// ============================================
+
+/**
+ * Endpoint Proxy Trasparente per Supabase
+ *
+ * Route: POST /v1/supabase-proxy
+ * Descrizione: Inoltra le richieste a Supabase in modo trasparente,
+ *              mantenendo la compatibilità totale con @supabase/supabase-js
+ *
+ * Body JSON:
+ * {
+ *   "method": "GET",                  // Metodo HTTP (GET, POST, PUT, PATCH, DELETE, HEAD)
+ *   "path": "/rest/v1/notes",         // Path della richiesta Supabase
+ *   "headers": {},                    // Headers opzionali
+ *   "body": {},                       // Body per POST/PUT/PATCH
+ *   "query": {}                       // Query parameters (es: {select: '*', limit: 10})
+ * }
+ *
+ * Risposta JSON:
+ * {
+ *   "success": true/false,
+ *   "statusCode": 200,
+ *   "data": {...},                    // Data restituita da Supabase
+ *   "headers": {...},                 // Headers rilevanti dalla risposta
+ *   "duration": 123                   // Durata della richiesta in ms
+ * }
+ *
+ * Middleware di Sicurezza applicati (nell'ordine):
+ * 1. proxyLimiter - Rate limiting (50 req/min)
+ * 2. validaInput - Validazione schema Joi
+ * 3. protectFromDangerousMethods - Blocca SQL pericolosi (TRUNCATE, DROP, ALTER, etc.)
+ * 4. validateTableAccess - Whitelist/Blacklist tabelle
+ */
+router.post(
+    '/supabase-proxy',
+    proxyLimiter,
+    validaInput(supabaseProxySchema, 'body'),
+    protectFromDangerousMethods,
+    validateTableAccess,
+    async (req, res) => {
+        richiesteProxy++;
+        const requestStartTime = Date.now();
+
+        const { method, path, headers, body, query } = req.body;
+
+        logger.info(`➡️  Richiesta Proxy: ${method} ${path} - IP: ${req.ip}`);
+        logger.debug(`Proxy Request Details: ${JSON.stringify({ method, path, query: Object.keys(query || {}) })}`);
+
+        try {
+            // Inoltra la richiesta a Supabase tramite il servizio proxy
+            const result = await forwardToSupabase(req);
+
+            const processingTime = Date.now() - requestStartTime;
+
+            // Log del risultato
+            if (result.success) {
+                logger.info(`✅ Proxy OK - Status: ${result.statusCode}, Durata: ${processingTime}ms`);
+            } else {
+                logger.warn(`⚠️  Proxy Errore - Status: ${result.statusCode}, Durata: ${processingTime}ms`);
+            }
+
+            // Impostiamo gli header rilevanti dalla risposta Supabase
+            if (result.headers && typeof result.headers === 'object') {
+                Object.keys(result.headers).forEach(key => {
+                    res.setHeader(key, result.headers[key]);
+                });
+            }
+
+            // Restituiamo la risposta con lo status code da Supabase
+            res.status(result.statusCode).json({
+                success: result.success,
+                statusCode: result.statusCode,
+                statusText: result.statusText,
+                data: result.data,
+                headers: result.headers,
+                duration: result.duration,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            const processingTime = Date.now() - requestStartTime;
+
+            logger.error(`❌ Errore Proxy: ${error.message}`);
+            logger.error(`Stack trace: ${error.stack}`);
+
+            res.status(500).json({
+                success: false,
+                statusCode: 500,
+                statusText: 'Internal Server Error',
+                data: null,
+                error: {
+                    code: 'PROXY_ERROR',
+                    message: 'Errore durante l\'inoltro della richiesta a Supabase',
+                    details: error.message
+                },
+                duration: processingTime,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+);
+
+// ============================================
 // ENDPOINT: GET /v1/health
 // ============================================
 
@@ -476,7 +648,7 @@ router.get('/health', (req, res) => {
 
     const healthInfo = {
         status: 'healthy',
-        versione: '1.3.1',
+        versione: '1.4.0',
         ambiente: process.env.NODE_ENV || 'development',
 
         uptime: {
@@ -493,7 +665,8 @@ router.get('/health', (req, res) => {
         statistiche: {
             richiesteProcessate,
             richiesteAsk,
-            richiesteEmbeddings
+            richiesteEmbeddings,
+            richiesteProxy
         },
 
         servizi: {
@@ -543,8 +716,8 @@ router.get('/info', (req, res) => {
     res.status(200).json({
         nome: 'Voicenotes API',
         versione: '1',
-        versioneCompleta: '1.3.1',
-        descrizione: 'API per Voicenotes con AI - Ricerca semantica, assistente Gemini e embedding vettoriali',
+        versioneCompleta: '1.4.0',
+        descrizione: 'API per Voicenotes con AI, Supabase Proxy e Ricerca semantica',
         endpoints: {
             test: {
                 path: '/v1/test',
@@ -576,6 +749,24 @@ router.get('/info', (req, res) => {
                     limit: 'Numero max note da processare 1-50 (opzionale, default 3)',
                     dryRun: 'Se true, simula senza scrivere sul DB (opzionale, default false)',
                     userId: 'UUID v4 per filtrare per utente (opzionale)'
+                }
+            },
+            supabaseProxy: {
+                path: '/v1/supabase-proxy',
+                metodo: 'POST',
+                descrizione: 'Proxy trasparente verso Supabase con sicurezza integrata',
+                body: {
+                    method: 'Metodo HTTP: GET, POST, PUT, PATCH, DELETE, HEAD (opzionale, default GET)',
+                    path: 'Path Supabase REST API (es: /rest/v1/notes)',
+                    query: 'Query parameters Supabase (opzionale, es: {select: "*", limit: 10})',
+                    headers: 'Headers personalizzati (opzionale)',
+                    body: 'Body per POST/PUT/PATCH (opzionale)'
+                },
+                sicurezza: {
+                    rateLimit: '50 richieste al minuto',
+                    whitelistTabelle: 'Configurabile via PROXY_TABLES_WHITELIST',
+                    blacklistTabelle: 'Configurabile via PROXY_TABLES_BLACKLIST',
+                    metodiBloccati: 'TRUNCATE, DROP, ALTER, CREATE, GRANT, REVOKE + custom'
                 }
             },
             health: {

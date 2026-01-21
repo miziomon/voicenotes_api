@@ -58,7 +58,7 @@ describe('Endpoint Root (/)', () => {
     test('GET / deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/');
 
-        expect(response.body.versione).toBe('1.3.1');
+        expect(response.body.versione).toBe('1.4.0');
     });
 
     /**
@@ -696,7 +696,7 @@ describe('API V1 - Endpoint Info aggiornato', () => {
     test('GET /v1/info deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/v1/info');
 
-        expect(response.body).toHaveProperty('versioneCompleta', '1.3.1');
+        expect(response.body).toHaveProperty('versioneCompleta', '1.4.0');
     });
 });
 
@@ -740,6 +740,6 @@ describe('API V1 - Health con nuovi servizi', () => {
     test('GET /v1/health deve restituire versione 1.3.1', async () => {
         const response = await request(app).get('/v1/health');
 
-        expect(response.body).toHaveProperty('versione', '1.3.1');
+        expect(response.body).toHaveProperty('versione', '1.4.0');
     });
 });

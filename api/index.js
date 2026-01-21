@@ -18,7 +18,7 @@
  * - Avvio del server (solo in ambiente locale)
  *
  * @author Voicenotes API Team
- * @version 1.3.1
+ * @version 1.4.0
  */
 
 // ============================================
@@ -134,7 +134,7 @@ logger.info('Routes v1 montate su /v1');
  */
 app.get('/', (req, res) => {
     res.status(200).json({
-        versione: '1.3.1'
+        versione: '1.4.0'
     });
 });
 
@@ -168,7 +168,8 @@ app.use((req, res) => {
             '/v1/health',
             '/v1/info',
             '/v1/ask',
-            '/v1/embeddings'
+            '/v1/embeddings',
+            '/v1/supabase-proxy'
         ],
         codice: 'NOT_FOUND'
     });
@@ -216,11 +217,12 @@ if (require.main === module) {
         console.log('   ├── GET  /               → Versione API');
         console.log('   │');
         console.log('   └── API v1:');
-        console.log('       ├── GET  /v1/test       → Endpoint test');
-        console.log('       ├── GET  /v1/health     → Health check');
-        console.log('       ├── GET  /v1/info       → Info API');
-        console.log('       ├── POST /v1/ask        → Assistente AI');
-        console.log('       └── POST /v1/embeddings → Generazione embedding');
+        console.log('       ├── GET  /v1/test           → Endpoint test');
+        console.log('       ├── GET  /v1/health         → Health check');
+        console.log('       ├── GET  /v1/info           → Info API');
+        console.log('       ├── POST /v1/ask            → Assistente AI');
+        console.log('       ├── POST /v1/embeddings     → Generazione embedding');
+        console.log('       └── POST /v1/supabase-proxy → Proxy trasparente Supabase');
         console.log('');
         console.log('⚙️  FUNZIONALITÀ ATTIVE:');
         console.log('   ├── Rate Limiting (100 req/15min globale)');

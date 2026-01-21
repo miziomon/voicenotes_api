@@ -4,6 +4,310 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [1.4.0] - 21 Gennaio 2026
+
+### 🚀 Nuovo: Supabase Proxy Trasparente - Fase 1
+
+#### Descrizione Generale
+
+Implementato un **API Proxy sicuro su Vercel** che agisce come intermediario trasparente tra l'app React e Supabase. L'obiettivo principale è permettere l'uso della `SUPABASE_SERVICE_ROLE_KEY` lato server mantenendo la compatibilità totale con `@supabase/supabase-js` client-side.
+
+**Per l'app React non cambia nulla**, è sufficiente modificare solo la `SUPABASE_URL` puntando al proxy invece che direttamente a Supabase.
+
+#### Endpoint Implementato
+
+```
+POST /v1/supabase-proxy
+```
+
+**Body Request:**
+```json
+{
+  "method": "GET",                   // GET, POST, PUT, PATCH, DELETE, HEAD
+  "path": "/rest/v1/notes",          // Path Supabase REST API
+  "query": {                         // Query parameters (opzionali)
+    "select": "*",
+    "limit": 10
+  },
+  "headers": {},                     // Headers custom (opzionali)
+  "body": {}                         // Body per POST/PUT/PATCH (opzionale)
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "statusText": "OK",
+  "data": [...],                     // Data da Supabase
+  "headers": {...},                  // Headers rilevanti
+  "duration": 123,                   // Durata in ms
+  "timestamp": "2026-01-21T14:00:00.000Z"
+}
+```
+
+#### Architettura di Sicurezza Implementata
+
+Il proxy applica **4 livelli di sicurezza** attraverso middleware modulari:
+
+##### 1. Rate Limiting Dedicato (`proxyLimiter`)
+- **Limite:** 50 richieste al minuto
+- **Scopo:** Proteggere da abusi mantenendo usabilità per SPA
+- **Bilanciamento:** Più permissivo del `strictLimiter` (10/15min) ma più controllato del `globalLimiter` (100/15min)
+
+##### 2. Validazione Input con Joi (`validaInput`)
+- Schema `supabaseProxySchema` valida:
+  - `method`: Solo GET, POST, PUT, PATCH, DELETE, HEAD
+  - `path`: Lunghezza max 500 caratteri
+  - `query`, `headers`, `body`: Struttura corretta
+- Blocca richieste malformate prima dell'elaborazione
+
+##### 3. Protezione Metodi Pericolosi (`protectFromDangerousMethods`)
+- **Middleware:** `api/middleware/methodProtection.js`
+- **Metodi bloccati (hardcoded):**
+  - `TRUNCATE` - Svuota tabelle
+  - `DROP` - Elimina tabelle/database
+  - `ALTER` - Modifica schema
+  - `CREATE` - Crea oggetti database
+  - `GRANT` / `REVOKE` - Gestione permessi
+- **Metodi bloccati (configurabili):** Via `PROXY_BLOCKED_METHODS` in `.env`
+- **Rilevamento intelligente:** Analizza body, query parameters e RPC calls
+- **Log critico:** Ogni tentativo di operazione pericolosa viene loggato con IP e dettagli
+- **Risposta:** `403 Forbidden` con codice `DANGEROUS_METHOD_BLOCKED`
+
+##### 4. Whitelist/Blacklist Tabelle (`validateTableAccess`)
+- **Middleware:** `api/middleware/tableWhitelist.js`
+- **Configurazione flessibile via `.env`:**
+
+**Whitelist (PROXY_TABLES_WHITELIST):**
+- Se **vuota**: tutte le tabelle sono permesse
+- Se **popolata**: solo le tabelle elencate sono accessibili
+- Formato: lista separata da virgole (es: `notes,chat_sessions,chat_messages,usage_metrics`)
+
+**Blacklist (PROXY_TABLES_BLACKLIST):**
+- Se **vuota**: nessuna tabella è bloccata
+- Se **popolata**: le tabelle elencate sono sempre bloccate (priorità assoluta)
+- Formato: lista separata da virgole (es: `internal_logs,system_config,admin_users`)
+
+**Logica di validazione:**
+1. Se tabella in BLACKLIST → **BLOCCA** (priorità massima)
+2. Se WHITELIST vuota → **PERMETTI** (tutte le tabelle OK)
+3. Se WHITELIST popolata e tabella nella lista → **PERMETTI**
+4. Altrimenti → **BLOCCA**
+
+**Estrazione nome tabella:**
+- Parser intelligente che analizza il path `/rest/v1/{table_name}`
+- Fallback su `body.table` o `body.tableName` per chiamate complesse
+- Case-insensitive per robustezza
+
+#### Servizio Proxy - Forwarding Trasparente
+
+**File:** `api/services/supabaseProxy.js`
+
+**Funzionalità principali:**
+
+1. **Headers automatici per Supabase:**
+   ```javascript
+   {
+     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+     "Authorization": "Bearer SUPABASE_SERVICE_ROLE_KEY",
+     "Content-Type": "application/json"
+   }
+   ```
+
+2. **Filtraggio headers client:**
+   - Rimuove header sensibili: `authorization`, `apikey`, `host`, `connection`
+   - Mantiene header sicuri dal client
+   - Prevenisce conflicts e leakage
+
+3. **Preservazione completa:**
+   - Query parameters → URL encoding corretto
+   - Body (POST/PUT/PATCH) → Forward identico
+   - Headers rilevanti dalla risposta → Passati al client
+
+4. **Logging dedicato:**
+   - **In locale:** File separato `logs/supabase-proxy-YYYY-MM-DD.log`
+   - **In produzione (Vercel):** Solo console
+   - **Livello:** Debug dettagliato con timing
+
+#### Nuovi File Creati
+
+```
+api/
+├── middleware/
+│   ├── tableWhitelist.js          # Validazione whitelist/blacklist tabelle
+│   └── methodProtection.js        # Protezione metodi SQL pericolosi
+├── services/
+│   └── supabaseProxy.js           # Servizio principale proxy trasparente
+└── utils/
+    └── rateLimiter.js             # Aggiunto proxyLimiter (50 req/min)
+
+tests/
+└── supabase_proxy_tests.http      # Suite completa test HTTP per proxy
+```
+
+#### File Modificati
+
+- **`.env`** - Aggiunte variabili:
+  - `SUPABASE_SERVICE_ROLE_KEY` (obbligatoria)
+  - `PROXY_TABLES_WHITELIST` (opzionale)
+  - `PROXY_TABLES_BLACKLIST` (opzionale)
+  - `PROXY_BLOCKED_METHODS` (opzionale)
+
+- **`.env.example`** - Template aggiornato con nuove variabili
+
+- **`api/utils/rateLimiter.js`** - Aggiunto `proxyLimiter` (50 req/min)
+
+- **`api/routes/v1.js`:**
+  - Import middleware e servizio proxy
+  - Schema validazione `supabaseProxySchema`
+  - Endpoint `POST /v1/supabase-proxy`
+  - Contatore `richiesteProxy` nell'health check
+  - Documentazione endpoint in `/v1/info`
+
+- **`api/index.js`:**
+  - Aggiunto `/v1/supabase-proxy` agli endpoint disponibili (404 handler)
+  - Aggiunto nella schermata di avvio server
+
+#### Esempi di Utilizzo
+
+**1. SELECT semplice:**
+```http
+POST /v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "*",
+    "user_id": "eq.123",
+    "limit": "10"
+  }
+}
+```
+
+**2. INSERT:**
+```http
+POST /v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/rest/v1/notes",
+  "headers": {
+    "Prefer": "return=representation"
+  },
+  "body": {
+    "user_id": "123",
+    "title": "Nuova nota",
+    "transcription": "Contenuto"
+  }
+}
+```
+
+**3. UPDATE:**
+```http
+POST /v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "PATCH",
+  "path": "/rest/v1/notes",
+  "query": {
+    "id": "eq.456"
+  },
+  "body": {
+    "title": "Titolo aggiornato"
+  }
+}
+```
+
+**4. DELETE:**
+```http
+POST /v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "DELETE",
+  "path": "/rest/v1/notes",
+  "query": {
+    "id": "eq.789"
+  }
+}
+```
+
+#### Codici di Errore
+
+| Codice | HTTP Status | Descrizione |
+|--------|-------------|-------------|
+| `TABLE_ACCESS_DENIED` | 403 | Tabella non in whitelist o in blacklist |
+| `DANGEROUS_METHOD_BLOCKED` | 403 | Rilevato metodo SQL pericoloso (TRUNCATE, DROP, etc.) |
+| `PROXY_RATE_LIMIT_EXCEEDED` | 429 | Superato limite 50 req/min |
+| `VALIDATION_ERROR` | 400 | Schema request non valido |
+| `PROXY_ERROR` | 500 | Errore generico durante forwarding |
+
+#### Configurazione Consigliata
+
+**Per massima sicurezza:**
+```env
+# Permetti solo tabelle specifiche
+PROXY_TABLES_WHITELIST=notes,chat_sessions,chat_messages,usage_metrics
+
+# Blocca tabelle sensibili (ridondante se usi whitelist, ma doppia sicurezza)
+PROXY_TABLES_BLACKLIST=internal_logs,system_config,admin_users
+
+# Blocca metodi custom oltre ai default
+PROXY_BLOCKED_METHODS=EXECUTE,CALL
+```
+
+**Per sviluppo/test:**
+```env
+# Permetti tutte le tabelle
+PROXY_TABLES_WHITELIST=
+
+# Blocca solo tabelle critiche
+PROXY_TABLES_BLACKLIST=internal_logs
+
+# Solo metodi di default bloccati
+PROXY_BLOCKED_METHODS=
+```
+
+#### Logging e Monitoring
+
+**Livelli di log:**
+- `INFO`: Ogni richiesta proxy (method, path, IP, durata)
+- `DEBUG`: Dettagli completi (headers, query params, body summary)
+- `WARN`: Errori Supabase, rate limit, accesso negato
+- `ERROR`: Tentativi di operazioni pericolose, errori critici
+
+**Metriche disponibili in `/v1/health`:**
+- `richiesteProxy`: Contatore totale richieste proxy
+- `askService.status`: Stato servizio AI
+- `embeddingService.status`: Stato servizio embedding
+
+#### Test Disponibili
+
+File `supabase_proxy_tests.http` include test per:
+- ✅ Operazioni CRUD (SELECT, INSERT, UPDATE, DELETE)
+- ✅ Tabelle multiple (notes, chat_sessions, chat_messages, usage_metrics)
+- ✅ Whitelist/Blacklist (scenari permessi e bloccati)
+- ✅ Protezione metodi pericolosi (TRUNCATE, DROP, ALTER)
+- ✅ Rate limiting (superamento soglia)
+- ✅ Validazione input (metodi invalidi, path vuoti)
+- ✅ Casi edge (body vuoto, defaults)
+
+#### Note per la Fase 2
+
+Il codice è stato strutturato in modo modulare per facilitare l'integrazione futura di:
+- **Crittografia AES-256-GCM** su colonne specifiche
+- **Middleware di trasformazione** request/response
+- **Cache** per riduzionecarico Supabase
+- **Audit logging** avanzato
+
+---
+
 ## [1.3.1] - 12 Gennaio 2026
 
 ### 🔧 Semplificazione API e Rimozione Endpoint Legacy

@@ -1,0 +1,378 @@
+###############################################################################
+# TEST API PROXY SUPABASE - Voicenotes API
+###############################################################################
+#
+# Questo file contiene esempi di utilizzo dell'endpoint Supabase Proxy.
+# Il proxy agisce come intermediario trasparente tra l'app React e Supabase.
+#
+# Compatibile con: REST Client (VSCode), IntelliJ HTTP Client
+#
+# IMPORTANTE: Assicurati di aver configurato le variabili d'ambiente nel file .env
+#
+###############################################################################
+
+# Variabili di ambiente (caricate da .env)
+@baseUrl = http://localhost:3000
+@userId = {{$dotenv TEST_USER_ID}}
+
+###############################################################################
+# 1. TEST PROXY - SELECT (GET)
+###############################################################################
+
+### 1.1 - SELECT tutte le note (senza filtri)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "*"
+  }
+}
+
+### 1.2 - SELECT con filtro per user_id
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "*",
+    "user_id": "eq.{{userId}}",
+    "limit": "10"
+  }
+}
+
+### 1.3 - SELECT specifiche colonne
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "id,title,created_at,status",
+    "user_id": "eq.{{userId}}",
+    "status": "eq.completed",
+    "order": "created_at.desc",
+    "limit": "5"
+  }
+}
+
+### 1.4 - SELECT con count
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "count"
+  },
+  "headers": {
+    "Prefer": "count=exact"
+  }
+}
+
+###############################################################################
+# 2. TEST PROXY - INSERT (POST)
+###############################################################################
+
+### 2.1 - INSERT singola nota
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/rest/v1/notes",
+  "headers": {
+    "Prefer": "return=representation"
+  },
+  "body": {
+    "user_id": "{{userId}}",
+    "title": "Nota di test dal proxy",
+    "transcription": "Questa è una nota di test creata tramite il proxy Supabase",
+    "status": "completed"
+  }
+}
+
+### 2.2 - INSERT multipla (array)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/rest/v1/notes",
+  "headers": {
+    "Prefer": "return=representation"
+  },
+  "body": [
+    {
+      "user_id": "{{userId}}",
+      "title": "Prima nota batch",
+      "transcription": "Contenuto prima nota",
+      "status": "completed"
+    },
+    {
+      "user_id": "{{userId}}",
+      "title": "Seconda nota batch",
+      "transcription": "Contenuto seconda nota",
+      "status": "completed"
+    }
+  ]
+}
+
+###############################################################################
+# 3. TEST PROXY - UPDATE (PATCH)
+###############################################################################
+
+### 3.1 - UPDATE nota esistente (sostituisci ID_NOTA con un ID reale)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "PATCH",
+  "path": "/rest/v1/notes",
+  "query": {
+    "id": "eq.ID_NOTA_DA_AGGIORNARE"
+  },
+  "headers": {
+    "Prefer": "return=representation"
+  },
+  "body": {
+    "title": "Titolo aggiornato tramite proxy",
+    "transcription": "Contenuto aggiornato"
+  }
+}
+
+### 3.2 - UPDATE multiplo con filtro
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "PATCH",
+  "path": "/rest/v1/notes",
+  "query": {
+    "user_id": "eq.{{userId}}",
+    "status": "eq.draft"
+  },
+  "body": {
+    "status": "completed"
+  }
+}
+
+###############################################################################
+# 4. TEST PROXY - DELETE
+###############################################################################
+
+### 4.1 - DELETE nota specifica (sostituisci ID_NOTA con un ID reale)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "DELETE",
+  "path": "/rest/v1/notes",
+  "query": {
+    "id": "eq.ID_NOTA_DA_ELIMINARE"
+  }
+}
+
+###############################################################################
+# 5. TEST PROXY - TABELLE DIVERSE
+###############################################################################
+
+### 5.1 - SELECT da chat_sessions
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/chat_sessions",
+  "query": {
+    "select": "*",
+    "user_id": "eq.{{userId}}",
+    "limit": "5"
+  }
+}
+
+### 5.2 - SELECT da chat_messages
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/chat_messages",
+  "query": {
+    "select": "*",
+    "limit": "10",
+    "order": "created_at.desc"
+  }
+}
+
+### 5.3 - SELECT da usage_metrics
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/usage_metrics",
+  "query": {
+    "select": "*",
+    "user_id": "eq.{{userId}}"
+  }
+}
+
+###############################################################################
+# 6. TEST SICUREZZA - TABELLE BLACKLIST (DOVREBBERO FALLIRE)
+###############################################################################
+
+### 6.1 - Tentativo accesso tabella in blacklist (dovrebbe ritornare 403)
+# NOTA: Configura PROXY_TABLES_BLACKLIST nel .env per testare
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/internal_logs",
+  "query": {
+    "select": "*"
+  }
+}
+
+###############################################################################
+# 7. TEST SICUREZZA - METODI PERICOLOSI (DOVREBBERO FALLIRE)
+###############################################################################
+
+### 7.1 - Tentativo TRUNCATE (dovrebbe ritornare 403)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/rest/v1/notes",
+  "body": {
+    "query": "TRUNCATE TABLE notes"
+  }
+}
+
+### 7.2 - Tentativo DROP (dovrebbe ritornare 403)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/rest/v1/notes",
+  "body": {
+    "command": "DROP TABLE notes"
+  }
+}
+
+###############################################################################
+# 8. TEST WHITELIST - SOLO TABELLE AUTORIZZATE
+###############################################################################
+
+### 8.1 - SELECT da tabella in whitelist (dovrebbe funzionare)
+# NOTA: Configura PROXY_TABLES_WHITELIST="notes,chat_sessions" nel .env
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "id,title",
+    "limit": "3"
+  }
+}
+
+### 8.2 - SELECT da tabella NON in whitelist (dovrebbe fallire con 403)
+# NOTA: Se PROXY_TABLES_WHITELIST contiene solo "notes", questa richiesta fallirà
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/usage_metrics",
+  "query": {
+    "select": "*"
+  }
+}
+
+###############################################################################
+# 9. TEST RATE LIMITING
+###############################################################################
+
+### 9.1 - Richiesta normale (dovrebbe funzionare)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "count"
+  }
+}
+
+### 9.2 - Test rate limit (esegui 51 volte rapidamente per superare il limite di 50 req/min)
+# Dovrebbe ritornare 429 Too Many Requests
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/rest/v1/notes",
+  "query": {
+    "select": "id",
+    "limit": "1"
+  }
+}
+
+###############################################################################
+# 10. TEST CASI EDGE
+###############################################################################
+
+### 10.1 - Richiesta senza body (usa valori di default)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{}
+
+### 10.2 - Richiesta con path vuoto (usa default /rest/v1/)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "GET"
+}
+
+### 10.3 - Richiesta con metodo non valido (dovrebbe fallire validazione)
+POST {{baseUrl}}/v1/supabase-proxy
+Content-Type: application/json
+
+{
+  "method": "INVALID_METHOD",
+  "path": "/rest/v1/notes"
+}
+
+###############################################################################
+# NOTE FINALI
+###############################################################################
+#
+# CONFIGURAZIONE VARIABILI .env PER I TEST:
+#
+# 1. WHITELIST VUOTA (tutte le tabelle permesse):
+#    PROXY_TABLES_WHITELIST=
+#
+# 2. WHITELIST SPECIFICA (solo tabelle elencate):
+#    PROXY_TABLES_WHITELIST=notes,chat_sessions,chat_messages,usage_metrics
+#
+# 3. BLACKLIST (blocca tabelle specifiche):
+#    PROXY_TABLES_BLACKLIST=internal_logs,system_config,admin_users
+#
+# 4. METODI BLOCCATI CUSTOM (oltre ai default TRUNCATE, DROP, ALTER, etc.):
+#    PROXY_BLOCKED_METHODS=EXECUTE,CALL
+#
+###############################################################################
