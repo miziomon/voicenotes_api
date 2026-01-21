@@ -1,6 +1,6 @@
 {
   "name": "voicenotes-api",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "API per Voicenotes con AI, Supabase Proxy e Ricerca semantica",
   "main": "api/index.js",
   "scripts": {
