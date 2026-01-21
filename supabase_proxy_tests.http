@@ -12,8 +12,8 @@
 ###############################################################################
 
 # Variabili di ambiente (caricate da .env)
-@baseUrl = http://localhost:3000
-#@baseUrl = https://voicenotes-api.vercel.app/
+#@baseUrl = http://localhost:3000
+@baseUrl = https://voicenotes-api.vercel.app/
 
 @userId = {{$dotenv TEST_USER_ID}}
 
@@ -385,6 +385,15 @@ Prefer: return=representation
 ### 11.3 - Gateway DELETE
 DELETE {{baseUrl}}/v1/supabase-proxy/rest/v1/notes?id=eq.ID_DA_CANCELLARE
 Content-Type: application/json
+
+
+
+
+### 11.4 - Gateway OPTIONS
+OPTIONS {{baseUrl}}/v1/supabase-proxy/rest/v1/plans?select=*&id=eq.pro
+
+Content-Type: application/json
+
 
 #
 # 1. WHITELIST VUOTA (tutte le tabelle permesse):
