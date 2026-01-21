@@ -39,6 +39,7 @@ const { sanitizzaInput } = require('./utils/validator');
 
 // Importiamo le routes versionate
 const v1Routes = require('./routes/v1');
+const v2Routes = require('./routes/v2');
 
 // ============================================
 // INIZIALIZZAZIONE DELL'APPLICAZIONE
@@ -120,8 +121,12 @@ app.use(globalLimiter);
 // Tutti gli endpoint definiti in v1.js saranno accessibili come /v1/...
 app.use('/v1', v1Routes);
 
+// Montiamo le routes della versione 2 sul path /v2
+app.use('/v2', v2Routes);
+
 // Logghiamo l'avvenuto montaggio delle routes
 logger.info('Routes v1 montate su /v1');
+logger.info('Routes v2 montate su /v2');
 
 // ============================================
 // ENDPOINT ROOT (/)

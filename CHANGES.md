@@ -4,6 +4,44 @@ Questo file documenta tutte le modifiche apportate al progetto **Voicenotes API*
 
 ---
 
+## [2.0.0] - 21 Gennaio 2026
+
+### 🚀 Nuovo: API Versione 2 - Supabase Proxy
+
+#### Descrizione
+
+Creata la versione 2 dell'API con un endpoint proxy dedicato per evoluzioni future senza impattare la V1.
+
+#### Struttura File Creati
+
+```
+api/
+├── routes/v2.js              # Router Express per API V2
+└── services/supabaseProxyV2.js  # Servizio Proxy V2 (copia modificabile)
+```
+
+#### Endpoint Disponibili
+
+| Metodo | Endpoint | Descrizione |
+|--------|----------|-------------|
+| ALL | `/v2/supabase-proxy/*` | Proxy Gateway Mode |
+| POST | `/v2/supabase-proxy` | Proxy RPC Mode |
+| GET | `/v2/info` | Informazioni API V2 |
+| GET | `/v2/health` | Health check V2 |
+
+#### File Modificati
+
+- `api/index.js`: Aggiunto import e montaggio route V2 su `/v2`
+- `vercel.json`: Aggiunta regola routing per `/v2/*`
+
+#### Note
+
+- Middleware condivisi con V1 (`tableWhitelist`, `methodProtection`)
+- Servizio `supabaseProxyV2.js` è una copia indipendente da `supabaseProxy.js`
+- V1 rimane attiva e funzionante
+
+---
+
 ## [1.4.0] - 21 Gennaio 2026
 
 ### 🚀 Nuovo: Supabase Proxy Trasparente - Fase 1
