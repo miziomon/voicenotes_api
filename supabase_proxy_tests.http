@@ -12,8 +12,8 @@
 ###############################################################################
 
 # Variabili di ambiente (caricate da .env)
-#@baseUrl = http://localhost:3000
-@baseUrl = https://voicenotes-api.vercel.app/
+@baseUrl = http://localhost:3000
+#@baseUrl = https://voicenotes-api.vercel.app/
 
 @userId = {{$dotenv TEST_USER_ID}}
 

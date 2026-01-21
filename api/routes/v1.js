@@ -543,12 +543,12 @@ router.post('/embeddings', strictLimiter, validaInput(embeddingsSchema, 'body'),
  *    -> Parsata e inoltrata
  */
 router.all(
-    ['/supabase-proxy', '/supabase-proxy/*'],
+    // RegExp per catturare /supabase-proxy e tutti i suoi sottopercorsi
+    /^\/supabase-proxy(\/.*)?$/,
     proxyLimiter,
-    // Validazione condizionale: Solo per chiamate RPC (senza subpath) validiamo il body
+    // Validazione condizionale
     (req, res, next) => {
-        // Se c'è un subpath (es: /rest/v1/...), siamo in Gateway mode -> Skip validazione body
-        // req.path contiene il path relativo al router (es: /supabase-proxy o /supabase-proxy/rest/...)
+        // req.path sarà ad es. /supabase-proxy/rest/v1/notes
         const pathSuffix = req.path.replace('/supabase-proxy', '');
 
         if (pathSuffix.length > 1) { // > 1 per gestire eventuale slash finale

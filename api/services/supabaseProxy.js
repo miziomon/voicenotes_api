@@ -145,9 +145,9 @@ const forwardToSupabase = async (req) => {
             // MODALITÀ GATEWAY: Parametri dalla richiesta HTTP reale
             method = req.method;
 
-            // Rimuoviamo il prefisso /v1/supabase-proxy dal path
-            // Esempio: /v1/supabase-proxy/rest/v1/notes -> /rest/v1/notes
-            targetPath = req.url.replace(/^\/?v1\/supabase-proxy/, '') || '/rest/v1/';
+            // Rimuoviamo il prefisso /supabase-proxy dal path (siamo già dentro /v1)
+            // Esempio req.url: /supabase-proxy/rest/v1/notes... -> /rest/v1/notes...
+            targetPath = req.url.replace(/^\/?supabase-proxy/, '') || '/rest/v1/';
 
             // Se targetPath inizia con // puliamolo
             if (targetPath.startsWith('//')) targetPath = targetPath.substring(1);
